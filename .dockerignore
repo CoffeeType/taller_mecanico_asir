@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gitattributes
+.env
+.env.local
+node_modules
+.vscode
+.idea
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db

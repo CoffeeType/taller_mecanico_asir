@@ -1,0 +1,26 @@
+# Deny access to sensitive files and directories
+<FilesMatch "^(env\.php|composer\.json|composer\.lock|package\.json|package-lock\.json|\.git)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent directory listing
+Options -Indexes
+DirectoryIndex index.php
+ErrorDocument 404 /index.php
+
+# Protect config folder and includes from direct HTTP access
+# Note: This blocks HTTP requests but allows PHP includes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    # Block direct HTTP access to config folder
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+config/ [NC]
+    RewriteRule ^config/ - [F,L]
+    # Block direct HTTP access to includes folder (but allow PHP includes)
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+includes/ [NC]
+    RewriteRule ^includes/ - [F,L]
+    # Block direct HTTP access to vendor folder
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+vendor/ [NC]
+    RewriteRule ^vendor/ - [F,L]
+</IfModule>

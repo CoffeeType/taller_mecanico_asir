@@ -1,0 +1,185 @@
+version: '3.8'
+
+services:
+  # Aplicación PHP con Apache
+  web:
+    build: .
+    container_name: taller_mecanico_web
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    volumes:
+      - ./:/var/www/html
+      - ./assets/images:/var/www/html/assets/images
+      - ./logs:/var/www/html/logs
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-trabajo_final_php}
+      - DB_USER=${MYSQL_USER:-app_user}
+      - DB_PASS=${MYSQL_PASSWORD:-app_password}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+      - monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Base de datos MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: taller_mecanico_mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-trabajo_final_php}
+      - MYSQL_USER=${MYSQL_USER:-app_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-app_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+      - monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      # Usar shell para expandir variable de entorno correctamente
+      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: taller_mecanico_prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    # Nota: La retención está hardcodeada a 15d. Para cambiarla, edita esta línea o usa un script de entrypoint
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    depends_on:
+      - alertmanager
+
+  # Alertmanager (notificaciones de alertas)
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: taller_mecanico_alertmanager
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/config/alertmanager.yml:ro
+      - ./monitoring/alertmanager/alertmanager-entrypoint.sh:/entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
+    environment:
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
+      - SMTP_REQUIRE_TLS=${SMTP_REQUIRE_TLS:-true}
+    entrypoint: ["/bin/sh", "-c", "sed 's/\\r$//' /entrypoint.sh > /tmp/entrypoint.sh && chmod +x /tmp/entrypoint.sh && /tmp/entrypoint.sh"]
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: taller_mecanico_grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+  # Node Exporter (métricas del sistema)
+  # Nota: En Windows, node-exporter puede tener limitaciones con los volúmenes del sistema
+  # Para producción en Linux, descomenta y ajusta los volúmenes según sea necesario
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: taller_mecanico_node_exporter
+    ports:
+      - "9100:9100"
+    # Volúmenes comentados para compatibilidad con Windows
+    # En Linux, descomenta estas líneas:
+    # volumes:
+    #   - /proc:/host/proc:ro
+    #   - /sys:/host/sys:ro
+    #   - /:/rootfs:ro
+    # command:
+    #   - '--path.procfs=/host/proc'
+    #   - '--path.sysfs=/host/sys'
+    #   - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+  # MySQL Exporter (métricas de base de datos)
+  # Nota: mysqld-exporter v0.15.0+ requiere --config.my-cnf en lugar de DATA_SOURCE_NAME
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: taller_mecanico_mysqld_exporter
+    ports:
+      - "9104:9104"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_HOST=${MYSQL_HOST:-mysql}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-app_password}
+    volumes:
+      - ./monitoring/mysqld_exporter/entrypoint.sh:/entrypoint.sh:ro
+    # Convertir CRLF a LF antes de ejecutar (compatibilidad Windows)
+    # El archivo está montado como read-only, así que creamos una copia temporal
+    entrypoint: ["/bin/sh", "-c", "sed 's/\r$//' /entrypoint.sh > /tmp/entrypoint.sh && chmod +x /tmp/entrypoint.sh && /bin/sh /tmp/entrypoint.sh"]
+    depends_on:
+      - mysql
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local

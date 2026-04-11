@@ -1,0 +1,146 @@
+services:
+  # Aplicación PHP con Apache (optimizada para Dokploy)
+  web:
+    build: .
+    ports:
+      # En Dokploy, no mapees puertos al host (tipo 8080:80).
+      # Define solo el puerto interno para que Dokploy pueda enrutar el dominio.
+      - "80"
+    volumes:
+      # Persistencia para ficheros generados por la app
+      - app_images:/var/www/html/assets/images
+      - app_logs:/var/www/html/logs
+      - app_cache:/var/www/html/cache
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-trabajo_final_php}
+      - DB_USER=${MYSQL_USER:-app_user}
+      - DB_PASS=${MYSQL_PASSWORD:-app_password}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Base de datos MySQL
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-trabajo_final_php}
+      - MYSQL_USER=${MYSQL_USER:-app_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-app_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    restart: unless-stopped
+    depends_on:
+      - alertmanager
+
+  # Alertmanager (notificaciones de alertas)
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      - ./monitoring/alertmanager/alertmanager-entrypoint.sh:/entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
+    environment:
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
+      - SMTP_REQUIRE_TLS=${SMTP_REQUIRE_TLS:-true}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "sed 's/\\r$//' /entrypoint.sh > /tmp/entrypoint.sh && chmod +x /tmp/entrypoint.sh && /tmp/entrypoint.sh"
+    restart: unless-stopped
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    ports:
+      # Puerto interno para que Dokploy pueda enrutar un dominio (opcional)
+      - "3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Node Exporter (métricas del sistema)
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    restart: unless-stopped
+
+  # MySQL Exporter (métricas de base de datos)
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_HOST=${MYSQL_HOST:-mysql}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-app_password}
+    volumes:
+      - ./monitoring/mysqld_exporter/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "sed 's/\\r$//' /entrypoint.sh > /tmp/entrypoint.sh && chmod +x /tmp/entrypoint.sh && /bin/sh /tmp/entrypoint.sh"
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  # Cloudflare Tunnel (opcional)
+  # 1) Crea un Tunnel en Cloudflare Zero Trust y copia el token.
+  # 2) Define la variable CLOUDFLARE_TUNNEL_TOKEN en Dokploy (secrets/env).
+  # 3) Descomenta este servicio para publicar la app sin abrir puertos 80/443.
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   restart: unless-stopped
+
+volumes:
+  mysql_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  app_images:
+  app_logs:
+  app_cache:
+
+networks:
+  app-network:
+    driver: bridge

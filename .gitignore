@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Runtime/generated
+logs/*.log
+cache/*.json
+
+# Local debug outputs
+db_out.txt
+import_log.txt
+mysql_logs.txt
+web_logs.txt
+tips_output.txt
+
+# Environment files (keep examples tracked)
+.env
+.env.*
+!.env.example

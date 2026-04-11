@@ -1,0 +1,257 @@
+groups:
+  - name: application_alerts
+    interval: 30s
+    rules:
+      # Alerta: Alta tasa de errores HTTP
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(app_http_requests_total{status=~"5.."}[5m])) 
+          / 
+          sum(rate(app_http_requests_total[5m])) 
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "Alta tasa de errores HTTP en la aplicación"
+          description: "La tasa de errores HTTP (5xx) es {{ $value | humanizePercentage }} durante los últimos 5 minutos."
+
+      # Alerta: Tasa de errores crítica
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(app_http_requests_total{status=~"5.."}[5m])) 
+          / 
+          sum(rate(app_http_requests_total[5m])) 
+          > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Tasa crítica de errores HTTP"
+          description: "La tasa de errores HTTP (5xx) es {{ $value | humanizePercentage }} durante los últimos 2 minutos."
+
+      # Alerta: Problema de conexión a base de datos
+      - alert: DatabaseConnectionDown
+        expr: app_db_connection_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Conexión a base de datos caída"
+          description: "La aplicación no puede conectarse a la base de datos."
+
+      # Alerta: Tiempo de respuesta alto
+      - alert: HighResponseTime
+        expr: |
+          app_http_response_time_seconds{quantile="0.95"} > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "Tiempo de respuesta alto (p95)"
+          description: "El tiempo de respuesta p95 es {{ $value }}s, superior al umbral de 2s."
+
+      # Alerta: Tiempo de respuesta crítico
+      - alert: CriticalResponseTime
+        expr: |
+          app_http_response_time_seconds{quantile="0.95"} > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Tiempo de respuesta crítico (p95)"
+          description: "El tiempo de respuesta p95 es {{ $value }}s, superior al umbral crítico de 5s."
+
+      # Alerta: Sin requests HTTP
+      - alert: NoHTTPRequests
+        expr: |
+          sum(rate(app_http_requests_total[5m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "No se están recibiendo requests HTTP"
+          description: "No se han recibido requests HTTP en los últimos 10 minutos."
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Alerta: Conexiones MySQL agotadas
+      - alert: MySQLConnectionsExhausted
+        expr: |
+          (mysql_global_status_threads_connected / mysql_global_variables_max_connections) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Conexiones MySQL casi agotadas"
+          description: "El {{ $value | humanizePercentage }} de las conexiones MySQL están en uso ({{ $value | humanize }})."
+
+      # Alerta: Conexiones MySQL críticas
+      - alert: MySQLConnectionsCritical
+        expr: |
+          (mysql_global_status_threads_connected / mysql_global_variables_max_connections) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Conexiones MySQL críticas"
+          description: "El {{ $value | humanizePercentage }} de las conexiones MySQL están en uso ({{ $value | humanize }})."
+
+      # Alerta: Consultas lentas en MySQL
+      - alert: MySQLSlowQueries
+        expr: |
+          rate(mysql_global_status_slow_queries[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Alto número de consultas lentas en MySQL"
+          description: "Se están ejecutando {{ $value }} consultas lentas por segundo."
+
+      # Alerta: MySQL no disponible
+      - alert: MySQLDown
+        expr: |
+          up{job="mysqld-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "MySQL exporter no disponible"
+          description: "El exporter de MySQL no está respondiendo."
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # Alerta: Uso alto de CPU
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Uso alto de CPU"
+          description: "El uso de CPU es {{ $value }}%, superior al umbral de 80%."
+
+      # Alerta: Uso crítico de CPU
+      - alert: CriticalCPUUsage
+        expr: |
+          100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Uso crítico de CPU"
+          description: "El uso de CPU es {{ $value }}%, superior al umbral crítico de 95%."
+
+      # Alerta: Uso alto de memoria
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) 
+          / 
+          node_memory_MemTotal_bytes 
+          > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Uso alto de memoria"
+          description: "El uso de memoria es {{ $value | humanizePercentage }}, superior al umbral de 85%."
+
+      # Alerta: Uso crítico de memoria
+      - alert: CriticalMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) 
+          / 
+          node_memory_MemTotal_bytes 
+          > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Uso crítico de memoria"
+          description: "El uso de memoria es {{ $value | humanizePercentage }}, superior al umbral crítico de 95%."
+
+      # Alerta: Espacio en disco bajo
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} 
+          / 
+          node_filesystem_size_bytes{mountpoint="/"}) 
+          < 0.15
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Espacio en disco bajo"
+          description: "Solo queda {{ $value | humanizePercentage }} de espacio disponible en disco."
+
+      # Alerta: Espacio en disco crítico
+      - alert: CriticalDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} 
+          / 
+          node_filesystem_size_bytes{mountpoint="/"}) 
+          < 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Espacio en disco crítico"
+          description: "Solo queda {{ $value | humanizePercentage }} de espacio disponible en disco."
+
+      # Alerta: Node Exporter no disponible
+      - alert: NodeExporterDown
+        expr: |
+          up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Node Exporter no disponible"
+          description: "El Node Exporter no está respondiendo."
+
+  - name: prometheus_alerts
+    interval: 30s
+    rules:
+      # Alerta: Prometheus no está scrapeando targets
+      - alert: PrometheusTargetDown
+        expr: |
+          up == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Target de Prometheus caído"
+          description: "El target {{ $labels.job }} ({{ $labels.instance }}) está caído."
+
+      # Alerta: Prometheus mismo no disponible
+      - alert: PrometheusDown
+        expr: |
+          up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus no disponible"
+          description: "Prometheus no está respondiendo."

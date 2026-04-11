@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  # App PHP + Apache (Coolify)
+  web:
+    build: .
+    ports:
+      - "80"
+    volumes:
+      - app_images:/var/www/html/assets/images
+      - app_logs:/var/www/html/logs
+      - app_cache:/var/www/html/cache
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      # MySQL gestionado por Coolify (variables inyectadas al linkar la DB)
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  app_images:
+    driver: local
+  app_logs:
+    driver: local
+  app_cache:
+    driver: local
