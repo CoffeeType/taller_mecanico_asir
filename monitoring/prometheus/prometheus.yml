@@ -24,6 +24,14 @@ scrape_configs:
     static_configs:
       - targets: ['mysqld-exporter:9104']
 
+  - job_name: 'telegraf'
+    static_configs:
+      - targets: ['telegraf:9273']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
   # PHP Application Metrics
   - job_name: 'php-app'
     static_configs:

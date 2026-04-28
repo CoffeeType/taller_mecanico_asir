@@ -25,7 +25,7 @@ Sistema web completo desarrollado con PHP y MySQL para la gestión de un taller 
 ## Estructura del Proyecto
 
 ```
-taller_mecanico/
+taller_mecanico_asir/
 ├── database/
 │   └── database.sql          # Script SQL con todas las tablas
 ├── config/
@@ -119,7 +119,7 @@ Para una instalación rápida y completa con monitorización incluida, consulta 
 ```bash
 # Clonar o descargar el proyecto
 git clone <url-del-repositorio>
-cd taller_mecanico
+cd taller_mecanico_asir
 
 # Configurar variables de entorno
 cp .env.example .env
@@ -135,7 +135,7 @@ docker-compose ps
 ```powershell
 # Clonar o descargar el proyecto
 git clone <url-del-repositorio>
-cd taller_mecanico
+cd taller_mecanico_asir
 
 # Configurar variables de entorno
 Copy-Item .env.example .env
@@ -151,7 +151,7 @@ docker-compose ps
 ```cmd
 REM Clonar o descargar el proyecto
 git clone <url-del-repositorio>
-cd taller_mecanico
+cd taller_mecanico_asir
 
 REM Configurar variables de entorno
 copy .env.example .env
@@ -336,21 +336,21 @@ C:\xampp\php\php.exe -S localhost:8000
 **En Linux/Mac:** Configura tu servidor web para apuntar al directorio del proyecto.
 
 **En Windows con XAMPP:**
-- Coloca el proyecto en `C:\xampp\htdocs\taller_mecanico\`
+- Coloca el proyecto en `C:\xampp\htdocs\taller_mecanico_asir\`
 - Inicia Apache desde el Panel de Control de XAMPP
-- Accede vía: http://localhost/taller_mecanico
+- Accede vía: http://localhost/taller_mecanico_asir
 
 **En Windows con WAMP:**
-- Coloca el proyecto en `C:\wamp64\www\taller_mecanico\`
+- Coloca el proyecto en `C:\wamp64\www\taller_mecanico_asir\`
 - Inicia los servicios desde WAMP
-- Accede vía: http://localhost/taller_mecanico
+- Accede vía: http://localhost/taller_mecanico_asir
 
 ## 🔐 Credenciales y Accesos del Sistema
 
 ### Credenciales de la Aplicación Web
 
 **Administrador por defecto:**
-- **URL:** http://localhost:8081 (Docker, configurable con `WEB_PORT`) o http://localhost/taller_mecanico (XAMPP)
+- **URL:** http://localhost:8081 (Docker, configurable con `WEB_PORT`) o http://localhost/taller_mecanico_asir (XAMPP)
 - **Usuario:** `admin`
 - **Contraseña:** `admin123`
 
@@ -667,7 +667,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 
 | Servicio | URL | Puerto | Credenciales |
 |----------|-----|--------|--------------|
-| **Aplicación Web** | http://localhost/taller_mecanico | 80 | admin / admin123 |
+| **Aplicación Web** | http://localhost/taller_mecanico_asir | 80 | admin / admin123 |
 | **phpMyAdmin** | http://localhost/phpmyadmin | 80 | root / (vacía) |
 | **MySQL** | localhost:3306 | 3306 | root / (vacía) |
 
@@ -786,7 +786,7 @@ Para obtener ayuda:
 ### 🔐 Credenciales Principales
 
 #### Aplicación Web (Admin)
-- **URL:** http://localhost:8081 (Docker, configurable con `WEB_PORT`) o http://localhost/taller_mecanico (XAMPP)
+- **URL:** http://localhost:8081 (Docker, configurable con `WEB_PORT`) o http://localhost/taller_mecanico_asir (XAMPP)
 - **Usuario:** `admin`
 - **Contraseña:** `admin123`
 

@@ -144,6 +144,52 @@ services:
       - monitoring-network
     restart: unless-stopped
 
+  # cAdvisor (métricas de contenedores Docker)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: taller_mecanico_cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    command:
+      - '--docker_only=true'
+      - '--housekeeping_interval=30s'
+    privileged: true
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Telegraf (Métricas de contenedores para Windows)
+  telegraf:
+    image: telegraf:latest
+    container_name: taller_mecanico_telegraf
+    user: "0:0"
+    privileged: true
+    entrypoint: ["telegraf"]
+    command: ["--config", "/etc/telegraf/telegraf.conf"]
+    environment:
+      - DOCKER_API_VERSION=1.41
+    ports:
+      - "9273:9273"
+    volumes:
+      - ./monitoring/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - //var/run/docker.sock:/var/run/docker.sock:rw
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+
   # MySQL Exporter (métricas de base de datos)
   # Nota: mysqld-exporter v0.15.0+ requiere --config.my-cnf en lugar de DATA_SOURCE_NAME
   mysqld-exporter:

@@ -76,7 +76,7 @@ Tienes dos opciones:
 **Opción A: Mover el proyecto a la carpeta htdocs de XAMPP (Recomendado)**
 
 1. Copia o mueve tu carpeta del proyecto a: `C:\xampp\htdocs\`
-2. El proyecto debería quedar en: `C:\xampp\htdocs\taller_mecanico\` (o el nombre que tenga tu carpeta)
+2. El proyecto debería quedar en: `C:\xampp\htdocs\taller_mecanico_asir\` (o el nombre que tenga tu carpeta)
 
 **Opción B: Dejar el proyecto donde está**
 
@@ -89,7 +89,7 @@ Si prefieres dejar el proyecto en su ubicación actual, puedes crear un enlace s
 Asegúrate de que exista la carpeta `assets/images/`. Si no existe:
 
 1. Abre el Explorador de Archivos
-2. Navega a `C:\xampp\htdocs\taller_mecanico\assets\` (o la ruta donde esté tu proyecto)
+2. Navega a `C:\xampp\htdocs\taller_mecanico_asir\assets\` (o la ruta donde esté tu proyecto)
 3. Crea una carpeta llamada `images` si no existe
 4. Asegúrate de que la carpeta tenga permisos de escritura (ver Paso 5.3 más abajo)
 
@@ -123,7 +123,7 @@ Deberías ver la nueva base de datos en la lista del lado izquierdo.
 2. Ve a la pestaña **"Importar"** (o "Import")
 3. Haz clic en el botón **"Elegir archivo"** (o "Choose File")
 4. Navega a tu proyecto y selecciona: `database\database.sql`
-   - Ruta completa: `C:\xampp\htdocs\taller_mecanico\database\database.sql` (ajusta según tu carpeta)
+   - Ruta completa: `C:\xampp\htdocs\taller_mecanico_asir\database\database.sql` (ajusta según tu carpeta)
 5. Haz clic en el botón **"Continuar"** (o "Go") en la parte inferior
 
 Espera a que termine la importación. Deberías ver un mensaje de éxito.
@@ -146,7 +146,7 @@ Si ves todas las tablas, ¡la base de datos está lista! ✅
 ### 5.1. Abrir el archivo de configuración
 
 1. Abre el archivo `config\database.php` con tu editor de código favorito
-   - Ruta completa: `C:\xampp\htdocs\taller_mecanico\config\database.php` (ajusta según tu carpeta)
+   - Ruta completa: `C:\xampp\htdocs\taller_mecanico_asir\config\database.php` (ajusta según tu carpeta)
 
 ### 5.2. Ajustar las credenciales para XAMPP
 
@@ -189,7 +189,7 @@ Estas deberían funcionar directamente. Si quieres cambiarlas, sigue los pasos s
 1. Abre PowerShell o CMD
 2. Navega a la carpeta del proyecto:
    ```powershell
-   cd C:\xampp\htdocs\taller_mecanico
+   cd C:\xampp\htdocs\taller_mecanico_asir
    ```
    (Ajusta la ruta según donde esté tu proyecto)
 3. Ejecuta:
@@ -229,7 +229,7 @@ Asegúrate de que Apache esté en estado **"Running"** (verde) en el Panel de Co
 Abre tu navegador y ve a:
 
 ```
-http://localhost/taller_mecanico
+http://localhost/taller_mecanico_asir
 ```
 
 (Ajusta la URL según el nombre de tu carpeta. Si la carpeta se llama diferente, usa ese nombre en la URL)
@@ -244,10 +244,10 @@ Deberías ver la página de inicio del proyecto.
 
 ### 7.3. Probar las páginas principales
 
-1. **Página de inicio:** http://localhost/taller_mecanico/
-2. **Página de noticias:** http://localhost/taller_mecanico/noticias.php
-3. **Página de registro:** http://localhost/taller_mecanico/registro.php
-4. **Página de login:** http://localhost/taller_mecanico/login.php
+1. **Página de inicio:** http://localhost/taller_mecanico_asir/
+2. **Página de noticias:** http://localhost/taller_mecanico_asir/noticias.php
+3. **Página de registro:** http://localhost/taller_mecanico_asir/registro.php
+4. **Página de login:** http://localhost/taller_mecanico_asir/login.php
 
 (Ajusta las URLs según el nombre de tu carpeta)
 
@@ -257,7 +257,7 @@ Deberías ver la página de inicio del proyecto.
 
 ### 8.1. Iniciar sesión como administrador
 
-1. Ve a: **http://localhost/taller_mecanico/login.php** (ajusta según tu carpeta)
+1. Ve a: **http://localhost/taller_mecanico_asir/login.php** (ajusta según tu carpeta)
 2. Ingresa las credenciales:
    - **Usuario:** `admin`
    - **Contraseña:** `admin123`
@@ -316,8 +316,8 @@ Si puedes iniciar sesión correctamente y ver el panel de administración, ¡el 
 
 **Solución:**
 1. Verifica que Apache esté en estado "Running" en XAMPP
-2. Asegúrate de que el proyecto esté en `C:\xampp\htdocs\taller_mecanico\` (o la ruta correcta)
-3. Verifica la URL: `http://localhost/taller_mecanico/` (ajusta según el nombre de tu carpeta)
+2. Asegúrate de que el proyecto esté en `C:\xampp\htdocs\taller_mecanico_asir\` (o la ruta correcta)
+3. Verifica la URL: `http://localhost/taller_mecanico_asir/` (ajusta según el nombre de tu carpeta)
 4. Si el proyecto está directamente en htdocs, usa: `http://localhost/`
 
 ### Error: "Access denied for user 'root'@'localhost'"
@@ -408,12 +408,12 @@ Ejemplo:
 
 1. ✅ **Instalar XAMPP** desde apachefriends.org
 2. ✅ **Iniciar Apache y MySQL** desde el Panel de Control de XAMPP
-3. ✅ **Mover proyecto** a `C:\xampp\htdocs\taller_mecanico\` (o la ubicación deseada)
+3. ✅ **Mover proyecto** a `C:\xampp\htdocs\taller_mecanico_asir\` (o la ubicación deseada)
 4. ✅ **Crear base de datos** `trabajo_final_php` en phpMyAdmin
 5. ✅ **Importar** `database\database.sql` desde phpMyAdmin
 6. ✅ **Configurar** `config/database.php` (usuario: `root`, contraseña: vacía por defecto)
 7. ✅ **Configurar permisos** de la carpeta `assets/images/` para escritura
-8. ✅ **Acceder** a http://localhost/taller_mecanico/ (ajusta según tu carpeta)
+8. ✅ **Acceder** a http://localhost/taller_mecanico_asir/ (ajusta según tu carpeta)
 9. ✅ **Login** con usuario `admin` y contraseña `admin123`
 
 ---

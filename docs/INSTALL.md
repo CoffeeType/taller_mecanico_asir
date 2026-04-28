@@ -141,19 +141,19 @@ C:\wamp64\bin\php\php8.2.0\php.exe -S localhost:8000
 **Opción 2: Usar Apache/Nginx (recomendado para producción)**
 
 - **XAMPP (Windows):** 
-  - Coloca el proyecto en `C:\xampp\htdocs\taller_mecanico\`
-  - Accede vía http://localhost/taller_mecanico
+  - Coloca el proyecto en `C:\xampp\htdocs\taller_mecanico_asir\`
+  - Accede vía http://localhost/taller_mecanico_asir
   - Ver [GUIA_DESPLIEGUE_LOCAL.md](GUIA_DESPLIEGUE_LOCAL.md) para guía detallada
 - **WAMP (Windows):** 
-  - Coloca el proyecto en `C:\wamp64\www\taller_mecanico\`
-  - Accede vía http://localhost/taller_mecanico
+  - Coloca el proyecto en `C:\wamp64\www\taller_mecanico_asir\`
+  - Accede vía http://localhost/taller_mecanico_asir
 - **Apache/Nginx (Linux/Mac):** 
   - Configura un virtual host apuntando al directorio del proyecto
-  - O coloca el proyecto en `/var/www/html/taller_mecanico/` y accede vía http://localhost/taller_mecanico
+  - O coloca el proyecto en `/var/www/html/taller_mecanico_asir/` y accede vía http://localhost/taller_mecanico_asir
 
 **URLs de acceso:**
 - Servidor integrado: http://localhost:8000
-- Apache/Nginx: http://localhost/taller_mecanico (ajusta según tu configuración)
+- Apache/Nginx: http://localhost/taller_mecanico_asir (ajusta según tu configuración)
 
 ## Credenciales por Defecto
 

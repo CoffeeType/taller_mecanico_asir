@@ -34,19 +34,19 @@ Esta guía explica cómo desplegar la aplicación Taller Mecánico usando Docker
 **En Linux/Mac:**
 ```bash
 git clone <url-del-repositorio>
-cd taller_mecanico
+cd taller_mecanico_asir
 ```
 
 **En Windows (PowerShell o CMD):**
 ```powershell
 git clone <url-del-repositorio>
-cd taller_mecanico
+cd taller_mecanico_asir
 ```
 
 **O si descargas el proyecto como ZIP:**
-1. Extrae el archivo ZIP en una carpeta (por ejemplo: `C:\proyectos\taller_mecanico`)
+1. Extrae el archivo ZIP en una carpeta (por ejemplo: `C:\proyectos\taller_mecanico_asir`)
 2. Abre PowerShell o CMD en esa carpeta
-3. Navega a la carpeta del proyecto: `cd C:\proyectos\taller_mecanico`
+3. Navega a la carpeta del proyecto: `cd C:\proyectos\taller_mecanico_asir`
 
 ### 2. Configurar Variables de Entorno
 
@@ -165,6 +165,7 @@ docker ps
   - `aplicacion.json` - Métricas de la aplicación (requests, tiempos de respuesta)
   - `base-datos.json` - Métricas de MySQL
   - `negocio.json` - Métricas de negocio (usuarios, citas, noticias)
+- **Telegraf/cAdvisor/Prometheus:** el stack también puede incluir `telegraf` (métricas por contenedor vía Docker) y `cadvisor` (métricas cAdvisor scrapeadas por Prometheus). Si ves `No data` en paneles por contenedor o problemas de permisos con el socket de Docker en Windows, consulta el runbook: [MONITORING_CONTAINER_METRICS_RUNBOOK.md](MONITORING_CONTAINER_METRICS_RUNBOOK.md).
 
 ### 5. Node Exporter (Métricas del Sistema)
 - **Puerto:** 9100
