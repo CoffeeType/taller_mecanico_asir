@@ -1,7 +1,19 @@
 <?php
-// includes/citas_api.php
+// includes/citas_api.php (served as /api/citas_api.php)
+if (!defined('TALLER_DB_JSON_EXIT')) {
+    define('TALLER_DB_JSON_EXIT', true);
+}
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/metrics_logger.php';
+
+startResponseTimeMeasurement();
+register_shutdown_function(static function (): void {
+    if (function_exists('logCurrentRequestMetrics')) {
+        logCurrentRequestMetrics();
+    }
+});
+
 session_start();
 
 header('Content-Type: application/json');
@@ -126,8 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmtUser = $pdo->prepare("SELECT email, nombre FROM users_data WHERE idUser = ?");
             $stmtUser->execute([$idUser]);
             $userRow = $stmtUser->fetch();
-            $guestEmail = $userRow['email']; // Use user's email for sending
-            $guestName = $userRow['nombre'];
+            if ($userRow) {
+                $guestEmail = $userRow['email']; // Use user's email for sending
+                $guestName = $userRow['nombre'];
+            }
         } catch (Exception $e) {
             // ignore
         }
@@ -171,5 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     } catch (PDOException $e) {
         sendJson(['error' => 'Error al guardar cita: ' . $e->getMessage()], 500);
     }
+} else {
+    sendJson(['error' => 'Method not allowed'], 405);
 }
 // End of file

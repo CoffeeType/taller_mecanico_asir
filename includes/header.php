@@ -73,8 +73,6 @@ $base_path = $is_admin_dir ? '../' : '';
                                         <li><a class="dropdown-item" href="<?= $base_path ?>admin/citas.php">Citas</a></li>
                                         <li><a class="dropdown-item" href="<?= $base_path ?>admin/noticias.php">Noticias</a></li>
                                         <li><a class="dropdown-item" href="<?= $base_path ?>admin/consejos.php">Consejos</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><a class="dropdown-item" href="<?= $base_path ?>admin/traffic-simulator.php"><i class="bi bi-activity me-1 text-primary"></i>Simulador de Tráfico</a></li>
                                     </ul>
                                 </li>
                             <?php else: ?>

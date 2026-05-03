@@ -1472,6 +1472,190 @@
                        "datasource":  "Prometheus",
                        "type":  "timeseries",
                        "title":  "Consumo de Memoria por Contenedor"
+                   },
+                   {
+                       "id":  18,
+                       "title":  "Simulador: requests/s por método",
+                       "type":  "timeseries",
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  63
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(rate(app_http_requests_total{source=\"simulator\"}[5m])) by (method)",
+                                           "legendFormat":  "{{method}}",
+                                           "refId":  "A",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          }
+                                       }
+                                   ],
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "axisPlacement":  "auto",
+                                                                           "drawStyle":  "line",
+                                                                           "fillOpacity":  10,
+                                                                           "lineWidth":  2,
+                                                                           "showPoints":  "never"
+                                                                       },
+                                                            "unit":  "reqps"
+                                                        }
+                                       },
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "calcs":  [
+                                                                    "last",
+                                                                    "mean"
+                                                                ],
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "values":  true
+                                                  }
+                                   }
+                   },
+                   {
+                       "id":  19,
+                       "title":  "Simulador: éxitos vs errores (2xx–3xx / 4xx–5xx)",
+                       "type":  "timeseries",
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  63
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(rate(app_http_requests_total{source=\"simulator\",status=~\"[23]..\"}[5m]))",
+                                           "legendFormat":  "éxitos",
+                                           "refId":  "A",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          }
+                                       },
+                                       {
+                                           "expr":  "sum(rate(app_http_requests_total{source=\"simulator\",status=~\"[45]..\"}[5m]))",
+                                           "legendFormat":  "errores",
+                                           "refId":  "B",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          }
+                                       }
+                                   ],
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "axisPlacement":  "auto",
+                                                                           "drawStyle":  "line",
+                                                                           "fillOpacity":  10,
+                                                                           "lineWidth":  2,
+                                                                           "showPoints":  "never"
+                                                                       },
+                                                            "unit":  "reqps"
+                                                        }
+                                       },
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "calcs":  [
+                                                                    "last",
+                                                                    "mean"
+                                                                ],
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "values":  true
+                                                  }
+                                   }
+                   },
+                   {
+                       "id":  20,
+                       "title":  "Simulador: tasa de error HTTP %",
+                       "type":  "timeseries",
+                       "gridPos":  {
+                                       "h":  7,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  71
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "100 * sum(rate(app_http_requests_total{source=\"simulator\",status=~\"[45]..\"}[5m])) / sum(rate(app_http_requests_total{source=\"simulator\"}[5m]))",
+                                           "legendFormat":  "% errores",
+                                           "refId":  "A",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          }
+                                       }
+                                   ],
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "custom":  {
+                                                                           "axisPlacement":  "auto",
+                                                                           "drawStyle":  "line",
+                                                                           "fillOpacity":  10,
+                                                                           "lineWidth":  2,
+                                                                           "showPoints":  "never"
+                                                                       },
+                                                            "max":  100,
+                                                            "min":  0,
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "yellow",
+                                                                                                 "value":  1
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  5
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "percent"
+                                                        }
+                                       },
+                       "options":  {
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   },
+                                       "legend":  {
+                                                      "calcs":  [
+                                                                    "last",
+                                                                    "max"
+                                                                ],
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "values":  true
+                                                  }
+                                   }
                    }
                ],
     "templating":  {

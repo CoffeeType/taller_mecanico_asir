@@ -1,11 +1,16 @@
 <?php
 // registro.php
 require_once 'config/database.php';
-require_once 'includes/header.php';
+require_once 'includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 if (isLoggedIn()) {
     redirect('index.php');
 }
+
+require_once 'includes/header.php';
 
 $errors = [];
 $input = [

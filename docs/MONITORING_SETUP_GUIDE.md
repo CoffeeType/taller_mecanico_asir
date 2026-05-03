@@ -25,13 +25,25 @@ Este documento describe cómo configurar y utilizar el sistema de monitoreo comp
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
+### Versiones de imágenes (stack local `docker-compose.yml`)
+
+| Componente | Imagen (pin actual) |
+|------------|----------------------|
+| Prometheus | `prom/prometheus:v3.11.3` |
+| Alertmanager | `prom/alertmanager:v0.32.1` |
+| Grafana | `grafana/grafana:13.0.1` |
+| Node Exporter | `prom/node-exporter:v1.11.1` |
+| cAdvisor | `gcr.io/cadvisor/cadvisor:v0.56.2` |
+| MySQL Exporter | `prom/mysqld-exporter:v0.19.0` |
+| Blackbox Exporter | `prom/blackbox-exporter:v0.26.0` |
+
 ## 🚀 Configuración Rápida
 
 ### Paso 1: Iniciar el Sistema de Monitoreo
 
 ```bash
-# Iniciar todos los servicios de monitoreo
-docker-compose up -d prometheus alertmanager grafana node-exporter mysqld-exporter
+# Iniciar todos los servicios de monitoreo (incluye blackbox para probes HTTP)
+docker-compose up -d prometheus alertmanager grafana node-exporter mysqld-exporter cadvisor telegraf blackbox-exporter
 
 # Verificar que todos los servicios estén corriendo
 docker-compose ps
@@ -56,8 +68,20 @@ docker-compose ps
 1. **Métricas de la Aplicación PHP**: http://localhost:8081/metrics.php (o el valor de `WEB_PORT`)
 2. **Métricas del Sistema**: http://localhost:9100/metrics
 3. **Métricas de MySQL**: http://localhost:9104/metrics
+4. **Blackbox (probes / métricas del exporter)**: http://localhost:9115/metrics (puerto `BLACKBOX_EXPORTER_PORT`, por defecto `9115`)
 
 > Nota: si cambias `WEB_PORT` en `.env`, el endpoint será `http://localhost:<WEB_PORT>/metrics.php` (por defecto `8081`).
+
+### Probes HTTP sintéticos (Blackbox)
+
+Prometheus hace probe GET desde `blackbox-exporter` hacia `web` (Docker DNS): `/`, `/login.php`, `/citaciones.php`, `/metrics.php`. La alerta `BlackboxProbeFailed` indica caída real de Apache/app aunque los exporters sigan vivos. Configuración del módulo: [monitoring/prometheus/blackbox.yml](monitoring/prometheus/blackbox.yml).
+
+### Simulador de tráfico y línea base HTTP
+
+Las series `app_http_requests_total{method,status,source}`, `app_http_response_time_*`, etc., se derivan de `logs/metrics.log` y `logs/response_time.log` (volumen `./logs` montado en `web`). La app registra **`source=app`**; el simulador **`source=simulator`**. El endpoint **`api/citas_api.php`** también escribe en los mismos logs vía `register_shutdown_function` para que las reservas cuenten en Prometheus.
+
+- Carga aislada fuera del proceso Apache: perfil Compose `traffic`, servicio worker + UI separada (ver [TRAFFIC_SIMULATOR.md](TRAFFIC_SIMULATOR.md)).
+- Paneles **Simulador:** en el dashboard principal usan `source="simulator"`.
 
 ## 📈 Dashboard Principal
 
@@ -77,6 +101,11 @@ docker-compose ps
 - **Métricas**: Porcentaje de errores 4xx y 5xx
 - **Umbrales**: Amarillo > 1%, Rojo > 5%
 - **Importancia**: Calidad del servicio y experiencia del usuario
+
+#### Simulador de tráfico (paneles 18–20)
+- **Requests/s por método** solo con `source="simulator"`.
+- **Éxitos vs errores** (códigos 2xx–3xx frente a 4xx–5xx) del simulador.
+- **Tasa de error %** del simulador (solo útil con perfil Compose `traffic` y mismo volumen `./logs`).
 
 #### 4. Tiempo de Respuesta (Panel 4)
 - **Métricas**: Percentiles p50, p95, p99 del tiempo de respuesta
@@ -109,7 +138,7 @@ docker-compose ps
 
 ### Configurar notificaciones por email (Alertmanager)
 
-El envío de emails se configura con variables de entorno (ver `.env.example`). En Docker, `docker-compose.yml` genera el archivo final de Alertmanager a partir de la plantilla `monitoring/prometheus/alertmanager.yml` sustituyendo los valores (para no commitear credenciales).
+El envío de emails se configura con variables de entorno (ver `.env.example`). En Docker, `docker-compose.yml` arranca Alertmanager con la plantilla [monitoring/alertmanager/alertmanager.yml](monitoring/alertmanager/alertmanager.yml) procesada por [monitoring/alertmanager/alertmanager-entrypoint.sh](monitoring/alertmanager/alertmanager-entrypoint.sh) (sustituye SMTP y destinatarios).
 
 Variables recomendadas:
 
@@ -131,45 +160,35 @@ docker-compose up -d alertmanager prometheus
 - Entra en Grafana → Dashboard principal → link `Test Email (Alertas)` (abre `http://localhost:8081/admin/test-alert-email.php` o el valor de `WEB_PORT`).
 - Requiere iniciar sesión como admin en la aplicación.
 
-### Alertas Críticas (Rojo)
+### Alertas Críticas (severidad `critical`)
 
-#### 1. Alta Tasa de Errores HTTP
-- **Condición**: Errores 5xx > 10% durante 2 minutos
-- **Acción**: Revisar logs de la aplicación, verificar base de datos
-- **Notificación**: Email inmediato al administrador
+| Alerta | Qué indica |
+|--------|------------|
+| `ApplicationMetricsDown` | Prometheus no scrapea `/metrics.php` del job `php-app`. |
+| `CriticalApp5xxRate` | Ratio 5xx/total (solo `source="app"`, ventana 15m) > 15 % con volumen mínimo de requests. |
+| `DatabaseConnectionDown` | `app_db_connection_healthy == 0`. |
+| `MySQLDown` | Job `mysqld-exporter` no responde. |
+| `MySQLConnectionsCritical` | `threads_connected / max_connections` > 95 %. |
+| `CriticalCPUUsage` / `CriticalMemoryUsage` / `CriticalDiskSpace` | Saturación de host (disco en `/`, excluye tmpfs/ramfs típicos). |
+| `NodeExporterDown` | Sin métricas de sistema. |
+| `PrometheusDown` | Prometheus no scrapeable. |
+| `BlackboxProbeFailed` | Fallo de probe HTTP sintético hacia la app (`probe_success == 0`). |
 
-#### 2. Conexión a Base de Datos Caída
-- **Condición**: `app_db_connection_healthy == 0` durante 1 minuto
-- **Acción**: Verificar MySQL, conexiones, credenciales
-- **Notificación**: Email crítico con enlace al dashboard
+### Alertas de Advertencia (severidad `warning`)
 
-#### 3. Tiempo de Respuesta Crítico
-- **Condición**: p95 > 5 segundos durante 2 minutos
-- **Acción**: Optimizar consultas, revisar recursos del sistema
-- **Notificación**: Email con detalles de rendimiento
+| Alerta | Qué indica |
+|--------|------------|
+| `HighApp5xxRate` | Ratio 5xx/total (`source="app"`) > 5 % con volumen mínimo. |
+| `HighAppLatencyP95` | p95 desde logs > 2 s (métrica aproximada; requiere tráfico mínimo). |
+| `MySQLConnectionsExhausted` | Uso de conexiones > 80 %. |
+| `MySQLSlowQueries` | Alta tasa de slow queries. |
+| `HighCPUUsage` / `HighMemoryUsage` / `LowDiskSpace` | Umbrales por debajo de los críticos. |
+| `CadvisorDown` / `TelegrafDown` | Monitoreo de contenedores opcional degradado. |
+| `BlackboxExporterDown` | No hay probes sintéticos hasta recuperar blackbox. |
 
-#### 4. Recursos del Sistema Agotados
-- **CPU**: > 95% durante 2 minutos
-- **Memoria**: > 95% durante 2 minutos
-- **Disco**: < 5% de espacio libre
-- **Acción**: Escalar recursos, limpiar logs/archivos
-- **Notificación**: Email crítico
+**Eliminadas por ruido o duplicidad:** `NoHTTPRequests` (sitios de bajo tráfico), `PrometheusTargetDown` genérico (`up == 0` para todos los jobs).
 
-### Alertas de Advertencia (Amarillo)
-
-#### 1. Errores HTTP Moderados
-- **Condición**: Errores 5xx > 5% durante 5 minutos
-- **Acción**: Investigar causas, monitorear tendencias
-
-#### 2. Tiempo de Respuesta Alto
-- **Condición**: p95 > 2 segundos durante 5 minutos
-- **Acción**: Optimizar consultas lentas, revisar caché
-
-#### 3. Uso de Recursos Alto
-- **CPU**: > 70% durante 5 minutos
-- **Memoria**: > 85% durante 5 minutos
-- **Disco**: < 15% de espacio libre
-- **Acción**: Planificar escalado, limpieza preventiva
+**Alertmanager:** agrupación por `alertname`, `component`, `severity`; reglas de inhibición para que la alerta crítica suprima la advertencia equivalente (p. ej. `CriticalApp5xxRate` → `HighApp5xxRate`).
 
 ## 📧 Configuración de Notificaciones
 
@@ -232,10 +251,13 @@ receivers:
 Editar `monitoring/prometheus/alerts.yml`:
 
 ```yaml
-# Cambiar umbrales de tiempo de respuesta
-- alert: HighResponseTime
-  expr: app_http_response_time_seconds{quantile="0.95"} > 3  # Cambiar de 2s a 3s
-  for: 5m
+# Cambiar umbral de tiempo de respuesta (solo warning)
+- alert: HighAppLatencyP95
+  expr: |
+    app_http_response_time_seconds{quantile="0.95"} > 3
+    and on()
+    sum(increase(app_http_requests_total{source="app"}[15m])) > 10
+  for: 10m
 ```
 
 ### Añadir Métricas Personalizadas
@@ -256,6 +278,25 @@ echo "app_custom_gauge{label=\"valor\"} " . $otro_valor . "\n";
    - `rate(app_http_requests_total[5m])`
    - `app_users_total`
    - `mysql_global_status_threads_connected`
+
+---
+
+## Validación de configuración
+
+```bash
+# Sintaxis de Compose
+docker compose config
+
+# Prometheus + reglas (imagen v3 usa entrypoint prometheus; invocar promtool explícito)
+docker run --rm --entrypoint promtool -v "$(pwd)/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:v3.11.3 \
+  check config /etc/prometheus/prometheus.yml
+docker run --rm --entrypoint promtool -v "$(pwd)/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:v3.11.3 \
+  check rules /etc/prometheus/alerts.yml
+```
+
+En Windows (PowerShell), sustituye `$(pwd)` por la ruta absoluta al repo o usa `${PWD}`.
+
+La plantilla de Alertmanager contiene placeholders (`__SMTP_*__`); la validación final ocurre al arrancar el contenedor tras el entrypoint.
 
 ## 🛠️ Troubleshooting
 

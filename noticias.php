@@ -46,7 +46,7 @@ try {
         <?php if (empty($noticias)): ?>
             <div class="alert alert-info text-center">
                 <i class="bi bi-info-circle me-2"></i>
-                No hay noticias publicadas. <a href="populate_motor_news.php" class="alert-link">Importar noticias de motor.es</a>
+                No hay noticias publicadas. <a href="scripts/populate_motor_news.php" class="alert-link">Importar noticias de motor.es</a>
             </div>
         <?php else: ?>
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">

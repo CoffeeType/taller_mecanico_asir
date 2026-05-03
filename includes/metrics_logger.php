@@ -61,8 +61,8 @@ function logHttpRequest($method, $status) {
     $logsDir = getLogsDirectory();
     $logFile = $logsDir . '/metrics.log';
     
-    // Formato: METHOD STATUS
-    $logEntry = $method . ' ' . $status . "\n";
+    // Formato: METHOD STATUS source=app (Prometheus label source)
+    $logEntry = $method . ' ' . $status . ' source=app' . "\n";
     
     // Escribir de forma atómica (append)
     @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);

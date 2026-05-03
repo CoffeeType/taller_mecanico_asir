@@ -19,3 +19,7 @@ logs/*metrics*snapshot*.txt
 .env
 .env.*
 !.env.example
+!.env.aws.example
+
+# Backups from deploy_aws_docker.sh (no subir dumps)
+backups/

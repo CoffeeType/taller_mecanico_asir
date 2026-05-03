@@ -52,7 +52,7 @@ services:
 
   # Prometheus - Metrics Collection (uses default config)
   prometheus:
-    image: prom/prometheus:v2.45.0
+    image: prom/prometheus:v3.11.3
     expose:
       - "9090"
     volumes:
@@ -63,7 +63,7 @@ services:
 
   # Grafana - Dashboards & Visualization
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:13.0.1
     expose:
       - "3000"
     environment:
@@ -80,7 +80,7 @@ services:
 
   # Alertmanager - Alert Notifications
   alertmanager:
-    image: prom/alertmanager:v0.26.0
+    image: prom/alertmanager:v0.32.1
     expose:
       - "9093"
     volumes:
@@ -91,7 +91,7 @@ services:
 
   # Node Exporter - System Metrics
   node-exporter:
-    image: prom/node-exporter:v1.6.1
+    image: prom/node-exporter:v1.11.1
     expose:
       - "9100"
     networks:

@@ -6,11 +6,34 @@ global:
   smtp_require_tls: __SMTP_REQUIRE_TLS__
 
 route:
-  group_by: ['alertname']
+  group_by: ['alertname', 'component', 'severity']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 1h
   receiver: 'email-notifications'
+
+# Cuando dispara la versión crítica, suprime la advertencia del mismo par (menos ruido).
+inhibit_rules:
+  - source_matchers:
+      - alertname = 'CriticalApp5xxRate'
+    target_matchers:
+      - alertname = 'HighApp5xxRate'
+  - source_matchers:
+      - alertname = 'MySQLConnectionsCritical'
+    target_matchers:
+      - alertname = 'MySQLConnectionsExhausted'
+  - source_matchers:
+      - alertname = 'CriticalCPUUsage'
+    target_matchers:
+      - alertname = 'HighCPUUsage'
+  - source_matchers:
+      - alertname = 'CriticalMemoryUsage'
+    target_matchers:
+      - alertname = 'HighMemoryUsage'
+  - source_matchers:
+      - alertname = 'CriticalDiskSpace'
+    target_matchers:
+      - alertname = 'LowDiskSpace'
 
 receivers:
   - name: 'email-notifications'

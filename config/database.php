@@ -195,7 +195,21 @@ try {
     // Log the error for debugging
     error_log("Database Connection Error: " . $e->getMessage());
     error_log("DSN: $dsn, User: $user");
-    
+
+    // JSON API clients (e.g. citaciones calendar) must not receive HTML from die()
+    if (defined('TALLER_DB_JSON_EXIT') && TALLER_DB_JSON_EXIT) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8', true, 503);
+        }
+        $isProduction = ($appEnv === 'production');
+        $payload = [
+            'error' => $isProduction
+                ? 'No se puede conectar con la base de datos.'
+                : $e->getMessage(),
+        ];
+        die(json_encode($payload, JSON_UNESCAPED_UNICODE));
+    }
+
     // Provide user-friendly error message
     $isProduction = ($appEnv === 'production');
     if ($isProduction) {

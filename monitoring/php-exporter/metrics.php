@@ -11,6 +11,15 @@ header('Content-Type: text/plain; version=0.0.4');
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+// Parser compartido para logs HTTP (tráfico app vs simulador)
+$__trafficSimLib = __DIR__ . '/scripts/traffic_simulator_lib.php';
+if (!is_readable($__trafficSimLib)) {
+    $__trafficSimLib = __DIR__ . '/../../scripts/traffic_simulator_lib.php';
+}
+if (is_readable($__trafficSimLib)) {
+    require_once $__trafficSimLib;
+}
+
 // Create database connection directly using environment variables
 // We don't include database.php to avoid die() calls that output HTML
 $pdo = null;
@@ -201,30 +210,51 @@ function obtenerMetricasHTTP() {
     }
     
     try {
-        // Leer todo el archivo de manera eficiente
         $handle = fopen($logFile, 'r');
         if ($handle === false) {
             error_log("No se pudo abrir el archivo de métricas: " . $logFile);
             return $metricas;
         }
         
-        // Leer línea por línea para manejar archivos grandes
         while (($line = fgets($handle)) !== false) {
             $line = trim($line);
-            if (empty($line)) {
+            if ($line === '') {
                 continue;
             }
-            
-            if (preg_match('/(GET|POST|PUT|DELETE|PATCH)\s+(\d{3})/', $line, $matches)) {
-                $method = $matches[1];
-                $status = $matches[2];
-                $key = 'app_http_requests_total{method="' . $method . '",status="' . $status . '"}';
-                
-                if (!isset($metricas[$key])) {
-                    $metricas[$key] = 0;
+            $parsed = null;
+            if (function_exists('traffic_simulator_parse_metrics_log_line')) {
+                $parsed = traffic_simulator_parse_metrics_log_line($line);
+            } else {
+                $work   = $line;
+                $srcTag = 'legacy';
+                if (preg_match('/\s+source=(app|simulator)\s*$/', $work, $sm)) {
+                    $srcTag = $sm[1];
+                    $work   = trim(substr($work, 0, -strlen($sm[0])));
                 }
-                $metricas[$key]++;
+                if (preg_match('/^(GET|POST|PUT|DELETE|PATCH)\s+(\d{3})(?:\s+(\S+))?$/', $work, $m)) {
+                    $path = isset($m[3]) && $m[3] !== '' ? $m[3] : null;
+                    $src  = $srcTag === 'legacy'
+                        ? (($path !== null && $path !== '') ? 'simulator' : 'app')
+                        : $srcTag;
+                    $parsed = [
+                        'method' => $m[1],
+                        'status' => (int) $m[2],
+                        'source' => $src,
+                    ];
+                }
             }
+            if ($parsed === null) {
+                continue;
+            }
+            $method = $parsed['method'];
+            $status = (string) $parsed['status'];
+            $source = $parsed['source'];
+            $key = 'app_http_requests_total{method="' . $method . '",status="' . $status . '",source="' . $source . '"}';
+
+            if (!isset($metricas[$key])) {
+                $metricas[$key] = 0;
+            }
+            $metricas[$key]++;
         }
         fclose($handle);
     } catch (Exception $e) {
@@ -344,8 +374,8 @@ echo "app_sessions_active " . ($metricasBD['app_sessions_active'] ?? 0) . "\n\n"
 echo "# HELP app_http_requests_total Total de requests HTTP\n";
 echo "# TYPE app_http_requests_total counter\n";
 if (empty($metricasHTTP)) {
-    // Emitir al menos una métrica con valor 0 para que Prometheus reconozca la métrica
-    echo 'app_http_requests_total{method="GET",status="200"} 0' . "\n";
+    // Métrica vacía para que Prometheus descubra la serie con etiqueta source
+    echo 'app_http_requests_total{method="GET",status="200",source="app"} 0' . "\n";
 } else {
     foreach ($metricasHTTP as $key => $value) {
         echo $key . " " . $value . "\n";

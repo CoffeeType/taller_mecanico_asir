@@ -24,18 +24,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "Error de seguridad (Token inválido).";
     } elseif ($action === 'create' || $action === 'update') {
         $idUser = $_POST['idUser'] ?? null;
-        $username = sanitize($_POST['usuario']);
-        $nombre = sanitize($_POST['nombre']);
-        $apellidos = sanitize($_POST['apellidos']);
-        $email = sanitize($_POST['email']);
-        $rol = sanitize($_POST['rol']);
+        $username = sanitize($_POST['usuario'] ?? '');
+        $nombre = sanitize($_POST['nombre'] ?? '');
+        $apellidos = sanitize($_POST['apellidos'] ?? '');
+        $email = sanitize($_POST['email'] ?? '');
+        $rol = sanitize($_POST['rol'] ?? '');
         // Other fields required by DB but simplified here for admin speed (or defaults)
         // For strictness, admin should fill everything or we allow nulls. 
         // Prompt says "Crear nuevos usuarios...", assuming full form or simplified.
         // Let's assume we need to fill the required fields from users_data
-        $telefono = sanitize($_POST['telefono']);
-        $fecha = $_POST['fecha_nacimiento'];
-        $password = $_POST['password'];
+        $telefono = sanitize($_POST['telefono'] ?? '');
+        $fecha = trim((string) ($_POST['fecha_nacimiento'] ?? ''));
+        $password = $_POST['password'] ?? '';
 
         try {
             $pdo->beginTransaction();
@@ -78,9 +78,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = "Error: " . $e->getMessage();
         }
     } elseif ($action === 'delete') {
-        $idUser = $_POST['idUser'];
-        // Prevent deleting self
-        if ($idUser == $_SESSION['user_id']) {
+        $idUser = $_POST['idUser'] ?? null;
+        if ($idUser === null || $idUser === '') {
+            $errors[] = "Usuario no especificado.";
+        } elseif ($idUser == $_SESSION['user_id']) {
             $errors[] = "No puedes borrarte a ti mismo.";
         } else {
             try {

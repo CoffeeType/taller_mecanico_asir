@@ -1,0 +1,4 @@
+[
+  {"path": "/", "method": "GET", "weight": 50},
+  {"path": "/health", "method": "GET", "weight": 10}
+]

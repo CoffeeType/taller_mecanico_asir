@@ -1,11 +1,16 @@
 <?php
 // perfil.php
 require_once 'config/database.php';
-require_once 'includes/header.php';
+require_once 'includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if (isLoggedIn()) {
+if (!isLoggedIn()) {
     redirect('login.php');
 }
+
+require_once 'includes/header.php';
 
 $idUser = $_SESSION['user_id'];
 $errors = [];

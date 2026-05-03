@@ -10,7 +10,7 @@ Sistema web completo desarrollado con PHP y MySQL para la gestión de un taller 
 - ✅ **Panel de Administración:** CRUD completo para usuarios, citas y noticias
 - ✅ **Monitorización:** Sistema completo con Prometheus y Grafana (solo con Docker)
 - ✅ **Seguridad:** Protección contra SQL Injection, XSS, validación de sesiones
-- ✅ **Responsive:** Diseño adaptable a dispositivos móviles y tablets
+- ✅ **Simulador de tráfico (opcional):** carga sintética desde **instancia Docker aparte** (UI aparte tipo Grafana), sin formar parte del panel admin — ver [docs/TRAFFIC_SIMULATOR.md](docs/TRAFFIC_SIMULATOR.md)
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -48,6 +48,8 @@ taller_mecanico_asir/
 │   └── php-exporter/
 │       └── metrics.php     # Endpoint de métricas PHP
 ├── docker/
+│   ├── traffic-simulator/    # Dockerfile worker + API control HTTP interno
+│   ├── traffic-simulator-ui/ # UI web standalone (Apache+PHP proxy)
 │   ├── init-db.sh          # Script de inicialización BD
 │   └── entrypoint.sh       # Script de entrada Docker
 ├── logs/                    # Logs de métricas
@@ -64,15 +66,18 @@ taller_mecanico_asir/
 ├── Dockerfile               # Imagen Docker de la aplicación
 ├── docker-compose.yml       # Orquestación de servicios
 ├── docker-compose.dokploy.yml # Orquestación para Dokploy (producción)
+├── docker-compose.aws.yml     # Orquestación para AWS EC2 (producción)
 ├── .env.example             # Ejemplo de variables de entorno
+├── .env.aws.example         # Variables ejemplo para despliegue AWS (EC2)
 ├── README.md                # Este archivo
 ├── docs/
 │   ├── GUIA_USUARIO.md              # Guía de usuario completa
 │   ├── STACK_TECNOLOGICO.md         # Stack tecnológico detallado
 │   ├── DOCKER_DEPLOYMENT.md         # Guía de despliegue Docker
+│   ├── AWS_DOCKER_DEPLOYMENT.md     # Guía de despliegue en AWS (EC2 + Docker + Packer)
 │   ├── MONITORING_SETUP_GUIDE.md    # Guía del sistema de monitorización
 │   ├── GUIA_DESPLIEGUE_LOCAL.md     # Guía despliegue local (XAMPP)
-│   └── INSTALL.md                   # Guía de instalación rápida
+│   └── TRAFFIC_SIMULATOR.md         # Simulador de tráfico (contenedor opcional / externas)
 ```
 
 ## Requisitos Previos
@@ -198,6 +203,10 @@ Este proyecto incluye un compose pensado para Dokploy: `docker-compose.dokploy.y
 Como base, usa `.env.example` y cambia credenciales para producción:
 
 - `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`
+
+### Opción AWS (EC2 + Docker)
+
+Guía: [docs/AWS_DOCKER_DEPLOYMENT.md](docs/AWS_DOCKER_DEPLOYMENT.md). Usa `docker-compose.aws.yml`, `.env.aws.example` y opcionalmente Packer (`packer/aws-docker-ami.pkr.hcl`) + `scripts/deploy_aws_docker.sh`.
 
 ### Opción 3: Despliegue en Coolify 🧩
 
@@ -656,6 +665,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 | Servicio | URL | Puerto | Credenciales |
 |----------|-----|--------|--------------|
 | **Aplicación Web** | http://localhost:8081 | 8081 (`WEB_PORT`) | admin / admin123 |
+| **Simulador tráfico (UI standalone)** | http://localhost:8890 | 8890 (`TRAFFIC_SIMULATOR_UI_PORT`; `docker compose --profile traffic`; token `.env`) | — |
 | **Grafana** | http://localhost:3000 | 3000 | admin / admin123 |
 | **Prometheus** | http://localhost:9090 | 9090 | Sin autenticación |
 | **MySQL** | localhost:3306 | 3306 | root / rootpassword |

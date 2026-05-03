@@ -17,7 +17,7 @@ $errors = [];
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'];
+    $action = $_POST['action'] ?? '';
     $titulo = sanitize($_POST['titulo'] ?? '');
     $texto = trim($_POST['texto'] ?? '');
     $imagen = sanitize($_POST['imagen'] ?? '');

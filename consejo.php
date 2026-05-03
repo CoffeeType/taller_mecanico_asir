@@ -1,13 +1,17 @@
 <?php
 // consejo.php
 require_once 'config/database.php';
-require_once 'includes/header.php';
+require_once 'includes/functions.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Get ID from URL
-$idConsejo = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$idConsejo = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+if ($idConsejo <= 0) {
+    redirect('noticias.php');
+}
 
 try {
-    // Fetch tip details
     $stmt = $pdo->prepare("
         SELECT c.*, u.nombre, u.apellidos 
         FROM consejos c 
@@ -16,18 +20,17 @@ try {
     ");
     $stmt->execute([$idConsejo]);
     $consejo = $stmt->fetch();
-
     if (!$consejo) {
-        // Redirect if not found
-        header("Location: noticias.php");
-        exit;
+        redirect('noticias.php');
     }
-
 } catch (PDOException $e) {
-    echo "<div class='alert alert-danger'>Error: " . $e->getMessage() . "</div>";
+    require_once 'includes/header.php';
+    echo "<div class='container py-4'><div class='alert alert-danger'>Error: " . htmlspecialchars($e->getMessage()) . "</div></div>";
     require_once 'includes/footer.php';
     exit;
 }
+
+require_once 'includes/header.php';
 ?>
 
 <div class="container py-5">

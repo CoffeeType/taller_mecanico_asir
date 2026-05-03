@@ -179,6 +179,14 @@ docker ps
 - Expone métricas de rendimiento de MySQL
 - **Configuración:** Usa un script de entrypoint personalizado para compatibilidad con Windows (`monitoring/mysqld_exporter/entrypoint.sh`)
 
+### 7. Traffic Simulator + UI (opcional — perfil `traffic`)
+- **Worker/imagen:** `docker/traffic-simulator/Dockerfile` — PHP CLI + API HTTP interna `:8085` (no publicada por defecto).
+- **UI/imagen:** `docker/traffic-simulator-ui/Dockerfile` — Apache + PHP (`api.php` hace proxy con token server-side).
+- **Puertos host:** típicamente **`TRAFFIC_SIMULATOR_UI_PORT` (8890)** → `:80` en la UI; el API de control `--8085` permanece sólo dentro de Docker.
+- **Volumen:** `./logs:/var/www/html/logs` **compartido entre `traffic-simulator`, `traffic-simulator-ui` y `web`**, mismo formato que consume `metrics.php`.
+- **Arranque:** `docker compose --profile traffic up -d`. Variables: `SIMULATOR_CONTROL_TOKEN`, `SIM_BASE_URL`, `SIM_UI_DEFAULT_BASE_URL` (ver [.env.example](../.env.example)).
+- Documentación: [TRAFFIC_SIMULATOR.md](TRAFFIC_SIMULATOR.md).
+
 ## Comandos Útiles
 
 > **Nota:** Los siguientes comandos funcionan igual en Linux, Mac y Windows (PowerShell/CMD). Docker Compose es multiplataforma.

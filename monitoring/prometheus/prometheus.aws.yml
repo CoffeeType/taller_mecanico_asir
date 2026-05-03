@@ -1,3 +1,6 @@
+# Prometheus para docker-compose.aws.yml (sin telegraf ni cadvisor).
+# El compose local usa monitoring/prometheus/prometheus.yml completo.
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -23,14 +26,6 @@ scrape_configs:
   - job_name: 'mysqld-exporter'
     static_configs:
       - targets: ['mysqld-exporter:9104']
-
-  - job_name: 'telegraf'
-    static_configs:
-      - targets: ['telegraf:9273']
-
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['cadvisor:8080']
 
   # PHP Application Metrics
   - job_name: 'php-app'

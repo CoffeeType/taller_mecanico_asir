@@ -31,6 +31,74 @@ services:
       retries: 3
       start_period: 40s
 
+  # Simulador de tráfico aislado (PHP CLI + API de control HTTP). Requiere: docker compose --profile traffic up -d
+  traffic-simulator:
+    build:
+      context: .
+      dockerfile: docker/traffic-simulator/Dockerfile
+    container_name: taller_mecanico_traffic_simulator
+    profiles:
+      - traffic
+    environment:
+      - SIM_BASE_URL=${SIM_BASE_URL:-http://web}
+      - SIM_LOG_DIR=/var/www/html/logs
+      - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}
+      - SIMULATOR_CONTROL_PORT=8085
+      - SIM_ROUTES_FILE=${SIM_ROUTES_FILE:-}
+      - SIM_EXTERNAL_TARGETS_ENABLED=${SIM_EXTERNAL_TARGETS_ENABLED:-true}
+      - SIM_REQUIRE_EXTERNAL_CONFIRMATION=${SIM_REQUIRE_EXTERNAL_CONFIRMATION:-true}
+      - SIM_INTERNAL_HOSTS=${SIM_INTERNAL_HOSTS:-web,localhost,127.0.0.1,::1,mysql,taller_mecanico_web,host.docker.internal}
+      - SIM_ALLOW_PRIVATE_TARGETS=${SIM_ALLOW_PRIVATE_TARGETS:-false}
+      - SIM_SSL_VERIFY=${SIM_SSL_VERIFY:-true}
+    volumes:
+      - ./logs:/var/www/html/logs
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  traffic-simulator-ui:
+    build:
+      context: .
+      dockerfile: docker/traffic-simulator-ui/Dockerfile
+    container_name: taller_mecanico_traffic_simulator_ui
+    profiles:
+      - traffic
+    ports:
+      - "${TRAFFIC_SIMULATOR_UI_PORT:-8890}:80"
+    environment:
+      - SIMULATOR_CONTAINER_URL=http://traffic-simulator:8085
+      - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}
+      - SIM_LOG_DIR=/var/www/html/logs
+      - SIM_UI_DEFAULT_BASE_URL=${SIM_UI_DEFAULT_BASE_URL:-http://web}
+      - PROMETHEUS_EXTERNAL_URL=${PROMETHEUS_EXTERNAL_URL:-http://localhost:9090}
+      - GRAFANA_EXTERNAL_URL=${GRAFANA_EXTERNAL_URL:-http://localhost:3000}
+      - TZ=${TZ:-UTC}
+      - SIM_EXTERNAL_TARGETS_ENABLED=${SIM_EXTERNAL_TARGETS_ENABLED:-true}
+      - SIM_REQUIRE_EXTERNAL_CONFIRMATION=${SIM_REQUIRE_EXTERNAL_CONFIRMATION:-true}
+      - SIM_INTERNAL_HOSTS=${SIM_INTERNAL_HOSTS:-web,localhost,127.0.0.1,::1,mysql,taller_mecanico_web,host.docker.internal}
+      - SIM_ALLOW_PRIVATE_TARGETS=${SIM_ALLOW_PRIVATE_TARGETS:-false}
+      - SIM_SSL_VERIFY=${SIM_SSL_VERIFY:-true}
+    volumes:
+      - ./logs:/var/www/html/logs
+    networks:
+      - app-network
+    depends_on:
+      traffic-simulator:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   # Base de datos MySQL
   mysql:
     image: mysql:8.0
@@ -59,7 +127,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: prom/prometheus:v2.45.0
+    image: prom/prometheus:v3.11.3
     container_name: taller_mecanico_prometheus
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
@@ -79,10 +147,11 @@ services:
     restart: unless-stopped
     depends_on:
       - alertmanager
+      - blackbox-exporter
 
   # Alertmanager (notificaciones de alertas)
   alertmanager:
-    image: prom/alertmanager:v0.26.0
+    image: prom/alertmanager:v0.32.1
     container_name: taller_mecanico_alertmanager
     ports:
       - "${ALERTMANAGER_PORT:-9093}:9093"
@@ -104,7 +173,7 @@ services:
 
   # Grafana
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:13.0.1
     container_name: taller_mecanico_grafana
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
@@ -126,7 +195,7 @@ services:
   # Nota: En Windows, node-exporter puede tener limitaciones con los volúmenes del sistema
   # Para producción en Linux, descomenta y ajusta los volúmenes según sea necesario
   node-exporter:
-    image: prom/node-exporter:v1.6.1
+    image: prom/node-exporter:v1.11.1
     container_name: taller_mecanico_node_exporter
     ports:
       - "9100:9100"
@@ -146,7 +215,7 @@ services:
 
   # cAdvisor (métricas de contenedores Docker)
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    image: gcr.io/cadvisor/cadvisor:v0.56.2
     container_name: taller_mecanico_cadvisor
     ports:
       - "8080:8080"
@@ -190,10 +259,24 @@ services:
     restart: unless-stopped
 
 
+  # Blackbox Exporter (HTTP synthetic checks hacia `web`)
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    container_name: taller_mecanico_blackbox
+    ports:
+      - "${BLACKBOX_EXPORTER_PORT:-9115}:9115"
+    command:
+      - '--config.file=/config/blackbox.yml'
+    volumes:
+      - ./monitoring/prometheus/blackbox.yml:/config/blackbox.yml:ro
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
   # MySQL Exporter (métricas de base de datos)
-  # Nota: mysqld-exporter v0.15.0+ requiere --config.my-cnf en lugar de DATA_SOURCE_NAME
+  # Nota: configuración vía entrypoint (my.cnf); ver monitoring/mysqld_exporter/entrypoint.sh
   mysqld-exporter:
-    image: prom/mysqld-exporter:v0.15.1
+    image: prom/mysqld-exporter:v0.19.0
     container_name: taller_mecanico_mysqld_exporter
     ports:
       - "9104:9104"

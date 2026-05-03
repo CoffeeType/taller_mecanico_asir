@@ -29,16 +29,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = "Error al eliminar cita.";
         }
     } elseif ($action === 'update' && $idCita) {
-        $fecha = $_POST['fecha_cita'];
-        $hora = $_POST['hora_cita'];
-        $motivo = sanitize($_POST['motivo_cita']);
-        
-        try {
-            $stmt = $pdo->prepare("UPDATE citas SET fecha_cita = ?, hora_cita = ?, motivo_cita = ? WHERE idCita = ?");
-            $stmt->execute([$fecha, $hora, $motivo, $idCita]);
-            $success = "Cita actualizada.";
-        } catch (PDOException $e) {
-            $errors[] = "Error al actualizar cita.";
+        $fecha = trim((string)($_POST['fecha_cita'] ?? ''));
+        $hora = trim((string)($_POST['hora_cita'] ?? ''));
+        $motivo = sanitize($_POST['motivo_cita'] ?? '');
+
+        if ($fecha === '' || $hora === '' || trim($motivo) === '') {
+            $errors[] = "Todos los campos son obligatorios para actualizar la cita.";
+        } else {
+            try {
+                $stmt = $pdo->prepare("UPDATE citas SET fecha_cita = ?, hora_cita = ?, motivo_cita = ? WHERE idCita = ?");
+                $stmt->execute([$fecha, $hora, $motivo, $idCita]);
+                $success = "Cita actualizada.";
+            } catch (PDOException $e) {
+                $errors[] = "Error al actualizar cita.";
+            }
         }
     }
 }

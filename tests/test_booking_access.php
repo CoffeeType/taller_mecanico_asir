@@ -1,35 +1,28 @@
 <?php
-// tests/test_booking_access.php
+// tests/test_booking_access.php — HTTP smoke (api/citas_api.php uses exit() internally)
 
-// Mock environment for GET request
-$_SERVER['REQUEST_METHOD'] = 'GET';
-$_GET['year'] = date('Y');
-$_GET['month'] = date('n');
+$base = rtrim(getenv('BOOKING_TEST_BASE') ?: 'http://127.0.0.1', '/');
+$url = $base . '/api/citas_api.php?year=' . rawurlencode((string) date('Y')) . '&month=' . rawurlencode((string) date('n'));
 
-// Prevent session headers already sent warning if possible, though strict usage might fail
-// We will suppress stderr for cleaner output check
-error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+$ctx = stream_context_create([
+    'http' => [
+        'timeout' => 10,
+        'ignore_errors' => true,
+    ],
+]);
 
-// Buffer output to verify JSON
-ob_start();
-
-try {
-    require __DIR__ . '/../api/citas_api.php';
-} catch (Exception $e) {
-    echo json_encode(['error' => 'Exception: ' . $e->getMessage()]);
-}
-
-$output = ob_get_clean();
-
-// Check if output is valid JSON
-$data = json_decode($output, true);
-
-if (json_last_error() === JSON_ERROR_NONE && isset($data['booked'])) {
-    echo "PASS: Received valid JSON with booked slots.\n";
-    echo "DEBUG_OUTPUT_START\n" . substr($output, 0, 100) . "...\nDEBUG_OUTPUT_END\n";
-    exit(0);
-} else {
-    echo "FAIL: Invalid output or missing 'booked' key.\n";
-    echo "RAW_OUTPUT: $output\n";
+$json = @file_get_contents($url, false, $ctx);
+if ($json === false) {
+    echo "FAIL: Could not reach API at {$url} (set BOOKING_TEST_BASE e.g. http://127.0.0.1:8081 when testing from host)\n";
     exit(1);
 }
+
+$data = json_decode($json, true);
+if (json_last_error() === JSON_ERROR_NONE && isset($data['booked'])) {
+    echo "PASS: Received valid JSON with booked slots.\n";
+    exit(0);
+}
+
+echo "FAIL: Invalid output or missing 'booked' key.\n";
+echo "RAW_OUTPUT: " . substr((string) $json, 0, 500) . "\n";
+exit(1);
