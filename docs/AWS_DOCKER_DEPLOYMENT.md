@@ -52,6 +52,7 @@ flowchart LR
 | [`.env.aws.example`](../.env.aws.example) | Plantilla de variables para el servidor; copiar a `.env` y rotar secretos. |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
 | [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh) | Backup opcional, `compose build/up`, comprobaciones HTTP. |
+| [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) | *User data* EC2: Docker (si falta), clon en `/opt/taller_mecanico_asir`, `.env` desde plantilla y primer `deploy_aws_docker.sh`. |
 
 ## Costes orientativos
 
@@ -96,6 +97,8 @@ Reglas **mínimas** (ajusta IPs):
 - Disco raíz: **gp3**, tamaño acorde (p. ej. 30–50 GiB iniciales).
 - **EBS cifrado** activado.
 - Asociar **rol IAM** si usarás SSM, backups S3, etc.
+
+**User data (primer arranque):** en el asistente de lanzamiento, pega el contenido de [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) en el campo *User data* (debe empezar por `#!/bin/bash`). Usa **texto plano**; no actives la opción de que el contenido **ya venga en Base64** salvo que hayas codificado tú el archivo entero (si no, la consola muestra error de Base64 inválido). Eso automatiza los pasos 2–5 de esta guía: instala Docker solo si la AMI no lo trae, clona el repo en `/opt/taller_mecanico_asir`, crea `.env` desde [`.env.aws.example`](../.env.aws.example) si no existe y ejecuta `deploy_aws_docker.sh` con `SKIP_BACKUP=1`. El remoto por defecto en el script apunta a este repositorio público; cámbialo si usas un fork o un clon privado (repos privados requieren credenciales o clave de despliegue aparte). Log en la instancia: `/var/log/taller-ec2-bootstrap.log`. **Tras el arranque**, entra a rotar contraseñas y tokens en `.env` (el script no sustituye secretos).
 
 ### 2) Instalar Docker (si la AMI no lo trae)
 

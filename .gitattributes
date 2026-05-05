@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# EC2 user data must be LF (CRLF breaks shebang / Linux); avoid base64 paste issues
+scripts/ec2-user-data-bootstrap.sh text eol=lf
