@@ -22,6 +22,9 @@ TARGET_DIR="/opt/taller_mecanico_asir"
 
 apt-get update -qq
 
+# EC2 Instance Connect: accept ephemeral SSH keys (console / aws ec2-instance-connect send-ssh-public-key)
+apt-get install -y -qq ec2-instance-connect
+
 if ! command -v git >/dev/null 2>&1; then
   apt-get install -y -qq git
 fi

@@ -44,16 +44,39 @@ docker compose -f "$COMPOSE_FILE" build --parallel
 docker compose -f "$COMPOSE_FILE" pull --ignore-pull-failures || true
 
 echo "Levantando stack..."
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+# --wait: esperar healthchecks (web depende de mysql + entrypoint largo en primer arranque).
+# --wait-timeout existe desde Compose ~2.23; sin el flag, --wait puede esperar indefinidamente en casos raros.
+UP_HELP="$(docker compose up --help 2>/dev/null || true)"
+if echo "$UP_HELP" | grep -q -- '--wait-timeout'; then
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout "${COMPOSE_UP_WAIT_TIMEOUT:-600}"
+elif echo "$UP_HELP" | grep -qE '[[:space:]]--wait[[:space:]]'; then
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --wait
+else
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+fi
 
 echo "Estado:"
 docker compose -f "$COMPOSE_FILE" ps
 
 echo "Smoke HTTP (web)..."
-if curl -sf "http://127.0.0.1:${WEB_HOST_PORT}/" >/dev/null; then
-  echo "OK: GET /"
-else
-  echo "ERROR: no responde http://127.0.0.1:${WEB_HOST_PORT}/" >&2
+WEB_URL="http://127.0.0.1:${WEB_HOST_PORT}/"
+MAX_WAIT_SEC="${WEB_SMOKE_WAIT_SEC:-240}"
+STEP=3
+elapsed=0
+ok=0
+while [[ "$elapsed" -lt "$MAX_WAIT_SEC" ]]; do
+  if curl -sf "$WEB_URL" >/dev/null; then
+    echo "OK: GET / (tras ~${elapsed}s)"
+    ok=1
+    break
+  fi
+  echo "Esperando HTTP en ${WEB_URL}... (${elapsed}/${MAX_WAIT_SEC}s)" >&2
+  sleep "$STEP"
+  elapsed=$((elapsed + STEP))
+done
+if [[ "$ok" != "1" ]]; then
+  echo "ERROR: no responde ${WEB_URL} tras ${MAX_WAIT_SEC}s" >&2
+  docker compose -f "$COMPOSE_FILE" logs --tail 120 web || true
   exit 1
 fi
 
