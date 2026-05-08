@@ -215,7 +215,7 @@ services:
 
   # cAdvisor (métricas de contenedores Docker)
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.56.2
+    image: ghcr.io/google/cadvisor:v0.56.2
     container_name: taller_mecanico_cadvisor
     ports:
       - "8080:8080"
