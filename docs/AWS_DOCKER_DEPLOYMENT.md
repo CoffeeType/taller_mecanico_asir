@@ -262,9 +262,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 | 502 / sin respuesta | `docker compose -f docker-compose.aws.yml logs web`; SG permite puerto 80/443. |
 | Prometheus “down” para algún target | `docker compose logs prometheus`; revisar que los nombres de servicio coinciden con `prometheus.aws.yml`. |
 | Grafana inaccesible desde fuera | Es **normal**: solo `127.0.0.1` en el host; usar túnel SSH o reverso seguro. |
-| BD vacía tras primer arranque | El seed [`database/database.sql`](../database/database.sql) solo corre en **volumen MySQL nuevo**; si ya existía `mysql_data`, no se re-ejecuta. |
-
-## Evolución recomendada
+| `compose build requires buildx 0.17.0 or later` (AL2023) | El RPM `docker` puede traer Buildx antiguo. Instala plugin ≥ 0.17, p. ej. `curl` del release [buildx](https://github.com/docker/buildx/releases) a `/usr/libexec/docker/cli-plugins/docker-buildx` + `chmod +x`; el bootstrap ya fuerza Buildx reciente. Luego `SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh`. |
 
 - **RDS MySQL** (o Aurora compatible MySQL) + cambiar `DB_HOST` / variables según endpoint gestionado (véase alias en [`config/database.php`](../config/database.php)).
 - **Separar monitorización** en otra instancia o servicio gestionado para reducir carga en la app.

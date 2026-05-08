@@ -56,6 +56,30 @@ if ! docker compose version >/dev/null 2>&1; then
   chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 fi
 
+# Buildx: `docker compose build` requires buildx >= 0.17 with recent Docker; AL2023 `docker` RPM
+# often bundles an older buildx → compose fails with "compose build requires buildx 0.17.0 or later".
+# Try distro package; if missing or too old, install a fixed release (same cli-plugins layout).
+DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
+buildx_meets_minimum() {
+  local cur
+  cur="$(docker buildx version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  [ -n "$cur" ] || return 1
+  [ "$(printf '%s\n' 'v0.17.0' "$cur" | sort -V | head -n1)" = "v0.17.0" ]
+}
+if ! buildx_meets_minimum; then
+  dnf install -y docker-buildx-plugin || true
+fi
+if ! buildx_meets_minimum; then
+  case "$(uname -m)" in
+    x86_64) BX_ARCH=amd64 ;;
+    aarch64) BX_ARCH=arm64 ;;
+    *) BX_ARCH=$(uname -m) ;;
+  esac
+  curl -fSL "https://github.com/docker/buildx/releases/download/${DOCKER_BUILDX_VERSION}/buildx-${DOCKER_BUILDX_VERSION}.linux-${BX_ARCH}" \
+    -o /usr/libexec/docker/cli-plugins/docker-buildx
+  chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
+fi
+
 install -d -o "${BOOT_USER}" -g "${BOOT_USER}" "${TARGET_DIR}"
 if [ ! -d "${TARGET_DIR}/.git" ]; then
   runuser -u "${BOOT_USER}" -- git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" "${TARGET_DIR}"
