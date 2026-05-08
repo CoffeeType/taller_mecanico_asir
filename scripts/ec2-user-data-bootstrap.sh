@@ -94,3 +94,4 @@ chmod +x scripts/deploy_aws_docker.sh
 SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh
 
 echo "Bootstrap done. Log: /var/log/taller-ec2-bootstrap.log"
+echo "Note for SSH: user ${BOOT_USER} was added to group docker. Open a NEW SSH session (or run: newgrp docker) before using docker without sudo."
