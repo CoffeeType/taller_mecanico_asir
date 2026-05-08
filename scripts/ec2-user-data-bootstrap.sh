@@ -37,27 +37,41 @@ retry() {
 }
 
 ensure_swap() {
-  local size_gb="${SWAP_SIZE_GB:-2}"
+  local size_gb="${SWAP_SIZE_GB:-4}"
   local swap_file="${SWAP_FILE:-/swapfile}"
+  local desired_bytes current_bytes active
 
   if [[ "${ENABLE_SWAP:-1}" != "1" ]]; then
     echo "Swap disabled (ENABLE_SWAP=${ENABLE_SWAP})."
     return 0
   fi
 
+  desired_bytes="$((size_gb * 1024 * 1024 * 1024))"
+  current_bytes="$(stat -c%s "$swap_file" 2>/dev/null || printf '0')"
+  active=0
   if swapon --show=NAME | grep -qx "$swap_file"; then
-    echo "Swap already active at ${swap_file}."
-    return 0
+    active=1
   fi
 
-  if [[ ! -f "$swap_file" ]]; then
-    echo "Creating ${size_gb}G swap at ${swap_file} to avoid OOM during Docker bootstrap."
+  if [[ ! -f "$swap_file" || "$current_bytes" -lt "$desired_bytes" ]]; then
+    if [[ "$active" == "1" ]]; then
+      echo "Resizing active swap ${swap_file} from $((current_bytes / 1024 / 1024))MB to ${size_gb}G."
+      swapoff "$swap_file"
+      active=0
+    else
+      echo "Creating ${size_gb}G swap at ${swap_file} to avoid OOM during Docker bootstrap."
+    fi
     fallocate -l "${size_gb}G" "$swap_file" || dd if=/dev/zero of="$swap_file" bs=1M count="$((size_gb * 1024))"
     chmod 600 "$swap_file"
     mkswap "$swap_file"
+  else
+    echo "Swap file ${swap_file} already sized at $((current_bytes / 1024 / 1024))MB."
   fi
 
-  swapon "$swap_file" || true
+  if ! swapon --show=NAME | grep -qx "$swap_file"; then
+    swapon "$swap_file"
+  fi
+
   if ! grep -qF "${swap_file} none swap" /etc/fstab; then
     echo "${swap_file} none swap sw 0 0" >> /etc/fstab
   fi
@@ -68,6 +82,81 @@ vm.vfs_cache_pressure = 50
 EOF
   sysctl --system >/dev/null || true
   free -h || true
+}
+
+random_secret() {
+  local len="${1:-32}"
+  local secret
+  set +o pipefail
+  secret="$(LC_ALL=C tr -dc 'A-Za-z0-9_@%+=:,.~-' </dev/urandom | head -c "$len")"
+  set -o pipefail
+  printf '%s' "$secret"
+}
+
+set_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if grep -qE "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+read_env_value() {
+  local file="$1"
+  local key="$2"
+  local line val
+  [[ -f "$file" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//$'\r'/}"
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" == "$key="* ]]; then
+      val="${line#*=}"
+      printf '%s' "$val"
+      return 0
+    fi
+  done < "$file"
+  return 1
+}
+
+seed_env_secret_if_placeholder() {
+  local file="$1"
+  local key="$2"
+  local len="${3:-36}"
+  local current
+  current="$(read_env_value "$file" "$key" || true)"
+  if [[ -z "$current" || "$current" == *CAMBIAR* || "$current" == *changeme* || "$current" == "rootpassword" || "$current" == "app_password" || "$current" == "admin123" ]]; then
+    set_env_value "$file" "$key" "$(random_secret "$len")"
+  fi
+}
+
+seed_env_secrets() {
+  local file="$1"
+  seed_env_secret_if_placeholder "$file" MYSQL_PASSWORD 36
+  seed_env_secret_if_placeholder "$file" MYSQL_ROOT_PASSWORD 36
+  seed_env_secret_if_placeholder "$file" GRAFANA_ADMIN_PASSWORD 36
+  seed_env_secret_if_placeholder "$file" SIMULATOR_CONTROL_TOKEN 48
+}
+
+raise_env_min_if_lower() {
+  local file="$1"
+  local key="$2"
+  local minimum="$3"
+  local current
+  current="$(read_env_value "$file" "$key" || true)"
+  if [[ ! "$current" =~ ^[0-9]+$ ]]; then
+    set_env_value "$file" "$key" "$minimum"
+  elif (( current < minimum )); then
+    set_env_value "$file" "$key" "$minimum"
+  fi
+}
+
+normalize_env_defaults() {
+  local file="$1"
+  raise_env_min_if_lower "$file" MIN_MONITORING_MEM_MB 3200
+  raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 3600
 }
 
 # --- Config (edit if needed) ---
@@ -98,8 +187,8 @@ EOF
   systemctl enable taller-docker-safe-mode.service
 }
 
-# Pin fallback CLI plugins (override if Compose demands newer Buildx).
-DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-v5.1.3}"
+# Pin fallback CLI plugins (override if you need a specific release).
+DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-latest}"
 DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
 
 # Small EC2 instances can lock up while building/pulling and starting MySQL + monitoring.
@@ -134,8 +223,13 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 if ! docker compose version >/dev/null 2>&1; then
   ARCH="$(uname -m)"
+  if [[ "${DOCKER_COMPOSE_VERSION}" == "latest" ]]; then
+    COMPOSE_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${ARCH}"
+  else
+    COMPOSE_URL="https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${ARCH}"
+  fi
   retry 5 15 curl -fSL \
-    "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${ARCH}" \
+    "${COMPOSE_URL}" \
     -o /usr/libexec/docker/cli-plugins/docker-compose
   chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 fi
@@ -175,6 +269,10 @@ fi
 if [[ ! -f "${TARGET_DIR}/.env" ]]; then
   runuser -u "${BOOT_USER}" -- cp "${TARGET_DIR}/.env.aws.example" "${TARGET_DIR}/.env"
 fi
+seed_env_secrets "${TARGET_DIR}/.env"
+normalize_env_defaults "${TARGET_DIR}/.env"
+chown "${BOOT_USER}:${BOOT_USER}" "${TARGET_DIR}/.env"
+chmod 600 "${TARGET_DIR}/.env"
 
 install_resource_guard
 

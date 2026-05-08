@@ -46,6 +46,17 @@ mem_total_mb() {
   awk '/MemTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null || printf '0'
 }
 
+swap_total_mb() {
+  awk '/SwapTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null || printf '0'
+}
+
+memory_budget_mb() {
+  local mem swap
+  mem="$(mem_total_mb)"
+  swap="$(swap_total_mb)"
+  printf '%d' "$((mem + swap))"
+}
+
 disk_avail_mb() {
   local avail_kb
   avail_kb="$(df -Pk "$PROJECT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')"
@@ -79,8 +90,8 @@ COMPOSE_PROFILES="$(read_env_var COMPOSE_PROFILES "${COMPOSE_PROFILES:-}")"
 FORCE_MONITORING_ON_LOW_MEM="$(read_env_var FORCE_MONITORING_ON_LOW_MEM "${FORCE_MONITORING_ON_LOW_MEM:-0}")"
 ALLOW_DEGRADED_STACK="$(read_env_var ALLOW_DEGRADED_STACK "${ALLOW_DEGRADED_STACK:-0}")"
 SKIP_SECRET_STRICT_CHECK="$(read_env_var SKIP_SECRET_STRICT_CHECK "${SKIP_SECRET_STRICT_CHECK:-0}")"
-MIN_MONITORING_MEM_MB="$(read_env_var MIN_MONITORING_MEM_MB "${MIN_MONITORING_MEM_MB:-1900}")"
-MIN_TRAFFIC_STACK_MEM_MB="$(read_env_var MIN_TRAFFIC_STACK_MEM_MB "${MIN_TRAFFIC_STACK_MEM_MB:-2000}")"
+MIN_MONITORING_MEM_MB="$(read_env_var MIN_MONITORING_MEM_MB "${MIN_MONITORING_MEM_MB:-3200}")"
+MIN_TRAFFIC_STACK_MEM_MB="$(read_env_var MIN_TRAFFIC_STACK_MEM_MB "${MIN_TRAFFIC_STACK_MEM_MB:-3600}")"
 MIN_FREE_DISK_MB="$(read_env_var MIN_FREE_DISK_MB "${MIN_FREE_DISK_MB:-2048}")"
 
 if [[ "$DEPLOY_MONITORING" == "1" ]] && ! profiles_contain monitoring; then
@@ -92,30 +103,32 @@ if [[ "$DEPLOY_MONITORING" == "1" ]] && ! profiles_contain monitoring; then
 fi
 
 MEM_MB="$(mem_total_mb)"
+SWAP_MB="$(swap_total_mb)"
+MEM_BUDGET_MB="$(memory_budget_mb)"
 WANT_MONITORING=0
 WANT_TRAFFIC=0
 profiles_contain monitoring && WANT_MONITORING=1
 profiles_contain traffic && WANT_TRAFFIC=1
 
 if [[ "$WANT_MONITORING" == "1" || "$WANT_TRAFFIC" == "1" ]]; then
-  if [[ "$FORCE_MONITORING_ON_LOW_MEM" != "1" && "$MEM_MB" -gt 0 ]]; then
+  if [[ "$FORCE_MONITORING_ON_LOW_MEM" != "1" && "$MEM_BUDGET_MB" -gt 0 ]]; then
     if [[ "$ALLOW_DEGRADED_STACK" == "1" ]]; then
       need_strip=0
-      if [[ "$WANT_MONITORING" == "1" && "$MEM_MB" -lt "$MIN_MONITORING_MEM_MB" ]]; then need_strip=1; fi
-      if [[ "$WANT_TRAFFIC" == "1" && "$MEM_MB" -lt "$MIN_TRAFFIC_STACK_MEM_MB" ]]; then need_strip=1; fi
+      if [[ "$WANT_MONITORING" == "1" && "$MEM_BUDGET_MB" -lt "$MIN_MONITORING_MEM_MB" ]]; then need_strip=1; fi
+      if [[ "$WANT_TRAFFIC" == "1" && "$MEM_BUDGET_MB" -lt "$MIN_TRAFFIC_STACK_MEM_MB" ]]; then need_strip=1; fi
       if [[ "$need_strip" == "1" ]]; then
-        echo "WARN: RAM ${MEM_MB}MB insuficiente para perfiles activos; modo degradado -> solo web+mysql." >&2
+        echo "WARN: memoria RAM+swap ${MEM_BUDGET_MB}MB (RAM=${MEM_MB}MB swap=${SWAP_MB}MB) insuficiente para perfiles activos; modo degradado -> solo web+mysql." >&2
         COMPOSE_PROFILES=""
         WANT_MONITORING=0
         WANT_TRAFFIC=0
       fi
     else
-      if [[ "$WANT_MONITORING" == "1" && "$MEM_MB" -lt "$MIN_MONITORING_MEM_MB" ]]; then
-        echo "ERROR: RAM ${MEM_MB}MB < MIN_MONITORING_MEM_MB=${MIN_MONITORING_MEM_MB}. Aumenta instancia/swap, FORCE_MONITORING_ON_LOW_MEM=1, o ALLOW_DEGRADED_STACK=1." >&2
+      if [[ "$WANT_MONITORING" == "1" && "$MEM_BUDGET_MB" -lt "$MIN_MONITORING_MEM_MB" ]]; then
+        echo "ERROR: memoria RAM+swap ${MEM_BUDGET_MB}MB (RAM=${MEM_MB}MB swap=${SWAP_MB}MB) < MIN_MONITORING_MEM_MB=${MIN_MONITORING_MEM_MB}. Aumenta instancia/swap, FORCE_MONITORING_ON_LOW_MEM=1, o ALLOW_DEGRADED_STACK=1." >&2
         exit 1
       fi
-      if [[ "$WANT_TRAFFIC" == "1" && "$MEM_MB" -lt "$MIN_TRAFFIC_STACK_MEM_MB" ]]; then
-        echo "ERROR: RAM ${MEM_MB}MB < MIN_TRAFFIC_STACK_MEM_MB=${MIN_TRAFFIC_STACK_MEM_MB}. Aumenta instancia/swap, FORCE_MONITORING_ON_LOW_MEM=1, o ALLOW_DEGRADED_STACK=1." >&2
+      if [[ "$WANT_TRAFFIC" == "1" && "$MEM_BUDGET_MB" -lt "$MIN_TRAFFIC_STACK_MEM_MB" ]]; then
+        echo "ERROR: memoria RAM+swap ${MEM_BUDGET_MB}MB (RAM=${MEM_MB}MB swap=${SWAP_MB}MB) < MIN_TRAFFIC_STACK_MEM_MB=${MIN_TRAFFIC_STACK_MEM_MB}. Aumenta instancia/swap, FORCE_MONITORING_ON_LOW_MEM=1, o ALLOW_DEGRADED_STACK=1." >&2
         exit 1
       fi
     fi
@@ -155,9 +168,9 @@ if [[ "$SKIP_SECRET_STRICT_CHECK" != "1" ]]; then
   mp="$(read_env_var MYSQL_PASSWORD "")"
   mrp="$(read_env_var MYSQL_ROOT_PASSWORD "")"
   gap="$(read_env_var GRAFANA_ADMIN_PASSWORD "")"
-  [[ "$mp" == *CAMBIAR* || -z "$mp" ]] && strict_secret_fail "MYSQL_PASSWORD invalido o placeholder."
-  [[ "$mrp" == *CAMBIAR* || -z "$mrp" ]] && strict_secret_fail "MYSQL_ROOT_PASSWORD invalido o placeholder."
-  [[ "$gap" == *CAMBIAR* || -z "$gap" ]] && strict_secret_fail "GRAFANA_ADMIN_PASSWORD invalido o placeholder."
+  [[ "$mp" == *CAMBIAR* || "$mp" == "app_password" || "$mp" == "rootpassword" || -z "$mp" ]] && strict_secret_fail "MYSQL_PASSWORD invalido o placeholder."
+  [[ "$mrp" == *CAMBIAR* || "$mrp" == "rootpassword" || "$mrp" == "app_password" || -z "$mrp" ]] && strict_secret_fail "MYSQL_ROOT_PASSWORD invalido o placeholder."
+  [[ "$gap" == *CAMBIAR* || "$gap" == "admin123" || -z "$gap" ]] && strict_secret_fail "GRAFANA_ADMIN_PASSWORD invalido o placeholder."
   if [[ "$WANT_TRAFFIC" == "1" ]]; then
     tok="$(read_env_var SIMULATOR_CONTROL_TOKEN "")"
     [[ "$tok" == *changeme* || "$tok" == *CAMBIAR* || -z "$tok" ]] && strict_secret_fail "SIMULATOR_CONTROL_TOKEN debil o placeholder con perfil traffic."
