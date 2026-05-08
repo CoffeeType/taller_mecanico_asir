@@ -157,6 +157,10 @@ normalize_env_defaults() {
   local file="$1"
   raise_env_min_if_lower "$file" MIN_MONITORING_MEM_MB 3200
   raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 3600
+  # cAdvisor GHCR: tag semver sin prefijo v (deploy normaliza si falta).
+  if ! grep -qE '^CADVISOR_IMAGE_TAG=' "$file"; then
+    set_env_value "$file" CADVISOR_IMAGE_TAG "0.56.2"
+  fi
 }
 
 # --- Config (edit if needed) ---

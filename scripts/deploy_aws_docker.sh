@@ -2,7 +2,7 @@
 # Despliegue / actualizacion idempotente en EC2 usando docker-compose.aws.yml
 # Uso (en el servidor): ./scripts/deploy_aws_docker.sh
 # Variables: COMPOSE_FILE (default docker-compose.aws.yml), SKIP_BACKUP=1, PROJECT_DIR
-# cAdvisor: CADVISOR_IMAGE_TAG (semver sin v, ej. 0.56.2; upstream README google/cadvisor Quick Start).
+# cAdvisor: el script resuelve CADVISOR_IMAGE_TAG (semver sin v): .env, API GitHub, o pin CADVISOR_IMAGE_TAG_FALLBACK.
 #
 # No hacer `source .env`: contraseñas con $, #, espacios rompen el shell.
 # Compose lee variables con --env-file .env
@@ -46,6 +46,80 @@ read_env_var() {
     fi
   done < "$file"
   printf '%s' "$default"
+}
+
+# Pin si no hay .env / API (debe coincidir con docker-compose.aws.yml :-${CADVISOR_IMAGE_TAG:-...}).
+CADVISOR_IMAGE_TAG_FALLBACK="${CADVISOR_IMAGE_TAG_FALLBACK:-0.56.2}"
+
+cadvisor_tag_from_github_latest() {
+  local json tag
+  json="$(curl -sf --max-time 25 --retry 2 \
+    -H "Accept: application/vnd.github+json" \
+    -H "User-Agent: taller-deploy-aws-docker" \
+    "https://api.github.com/repos/google/cadvisor/releases/latest")" || return 1
+  if command -v python3 >/dev/null 2>&1; then
+    tag="$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name","") or "")' 2>/dev/null || true)"
+  fi
+  if [[ -z "$tag" ]]; then
+    tag="$(printf '%s' "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+  [[ -n "$tag" ]] || return 1
+  printf '%s' "${tag#v}"
+}
+
+resolve_and_export_cadvisor_image_tag() {
+  local raw resolved
+  raw="$(read_env_var CADVISOR_IMAGE_TAG "")"
+  raw="${raw#v}"
+  if [[ -n "$raw" ]]; then
+    export CADVISOR_IMAGE_TAG="$raw"
+    return 0
+  fi
+  if [[ "$WANT_MONITORING" != "1" ]]; then
+    export CADVISOR_IMAGE_TAG="$CADVISOR_IMAGE_TAG_FALLBACK"
+    return 0
+  fi
+  resolved="$(cadvisor_tag_from_github_latest 2>/dev/null || true)"
+  resolved="${resolved#v}"
+  if [[ -z "$resolved" ]]; then
+    resolved="$CADVISOR_IMAGE_TAG_FALLBACK"
+    echo "cAdvisor: sin CADVISOR_IMAGE_TAG en .env y sin respuesta de GitHub API; usando pin ${resolved}" >&2
+  else
+    echo "cAdvisor: ultimo release en GitHub -> CADVISOR_IMAGE_TAG=${resolved}" >&2
+  fi
+  export CADVISOR_IMAGE_TAG="$resolved"
+}
+
+preflight_cadvisor_pull() {
+  [[ "$WANT_MONITORING" != "1" ]] && return 0
+  local ref tag_try pulled=0
+  for tag_try in "$CADVISOR_IMAGE_TAG" "$CADVISOR_IMAGE_TAG_FALLBACK"; do
+    tag_try="${tag_try#v}"
+    [[ -z "$tag_try" ]] && continue
+    ref="ghcr.io/google/cadvisor:${tag_try}"
+    echo "Preflight: docker pull cAdvisor (${ref})..." >&2
+    if docker pull "$ref"; then
+      export CADVISOR_IMAGE_TAG="$tag_try"
+      pulled=1
+      break
+    fi
+  done
+  if [[ "$pulled" != "1" ]]; then
+    tag_try="$(cadvisor_tag_from_github_latest 2>/dev/null || true)"
+    tag_try="${tag_try#v}"
+    if [[ -n "$tag_try" ]]; then
+      ref="ghcr.io/google/cadvisor:${tag_try}"
+      echo "Preflight: reintento cAdvisor con tag GitHub API (${ref})..." >&2
+      if docker pull "$ref"; then
+        export CADVISOR_IMAGE_TAG="$tag_try"
+        pulled=1
+      fi
+    fi
+  fi
+  if [[ "$pulled" != "1" ]]; then
+    echo "ERROR: no se pudo descargar ninguna imagen cAdvisor desde ghcr.io/google/cadvisor (red o tags)." >&2
+    exit 1
+  fi
 }
 
 mem_total_mb() {
@@ -143,6 +217,8 @@ fi
 
 export COMPOSE_PROFILES
 
+resolve_and_export_cadvisor_image_tag
+
 dump_diagnostics() {
   echo "Diagnostics: compose ps -a" >&2
   compose ps -a || true
@@ -166,7 +242,7 @@ TELEGRAF_HOST_PORT="$(read_env_var TELEGRAF_HOST_PORT 9273)"
 
 strict_secret_fail() {
   echo "ERROR: ${1}" >&2
-  echo "Rota secretos en .env o define SKIP_SECRET_STRICT_CHECK=1 (solo lab)." >&2
+  echo "Corrige .env en el servidor o define SKIP_SECRET_STRICT_CHECK=1 solo en laboratorio." >&2
   exit 1
 }
 
@@ -226,18 +302,7 @@ fi
 echo "Compose config (validacion)..."
 compose config >/dev/null
 
-CADVISOR_IMAGE_TAG="$(read_env_var CADVISOR_IMAGE_TAG "0.56.2")"
-if [[ "$WANT_MONITORING" == "1" ]]; then
-  if [[ "$CADVISOR_IMAGE_TAG" == v* ]]; then
-    echo "WARN: CADVISOR_IMAGE_TAG=${CADVISOR_IMAGE_TAG} lleva prefijo 'v'; en ghcr.io/google/cadvisor los tags son semver sin v (ej. 0.56.2). Ver https://github.com/google/cadvisor#quick-start-running-cadvisor-in-a-docker-container" >&2
-  fi
-  CADVISOR_IMAGE_REF="ghcr.io/google/cadvisor:${CADVISOR_IMAGE_TAG}"
-  echo "Preflight: docker pull cAdvisor (${CADVISOR_IMAGE_REF})..."
-  if ! docker pull "$CADVISOR_IMAGE_REF"; then
-    echo "ERROR: docker pull fallo para ${CADVISOR_IMAGE_REF}. Ajusta CADVISOR_IMAGE_TAG en .env al ultimo release (https://github.com/google/cadvisor/releases); el tag de imagen NO incluye el prefijo v." >&2
-    exit 1
-  fi
-fi
+preflight_cadvisor_pull
 
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 mkdir -p "$BACKUP_DIR"
@@ -264,7 +329,7 @@ if [[ "${COMPOSE_BUILD_PARALLEL:-0}" == "1" ]]; then
 else
   compose build
 fi
-compose pull --ignore-pull-failures || true
+compose pull
 
 echo "Levantando stack..."
 UP_HELP="$(docker compose up --help 2>/dev/null || true)"
