@@ -42,6 +42,26 @@ read_env_var() {
   printf '%s' "$default"
 }
 
+mem_total_mb() {
+  awk '/MemTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null || printf '0'
+}
+
+DEPLOY_MONITORING="$(read_env_var DEPLOY_MONITORING "${DEPLOY_MONITORING:-0}")"
+COMPOSE_PROFILES="$(read_env_var COMPOSE_PROFILES "${COMPOSE_PROFILES:-}")"
+if [[ "$DEPLOY_MONITORING" == "1" && -z "$COMPOSE_PROFILES" ]]; then
+  COMPOSE_PROFILES="monitoring"
+fi
+
+if [[ "$COMPOSE_PROFILES" == *monitoring* ]]; then
+  MEM_MB="$(mem_total_mb)"
+  MIN_MONITORING_MEM_MB="$(read_env_var MIN_MONITORING_MEM_MB "${MIN_MONITORING_MEM_MB:-1900}")"
+  if [[ "${FORCE_MONITORING_ON_LOW_MEM:-0}" != "1" && "$MEM_MB" -gt 0 && "$MEM_MB" -lt "$MIN_MONITORING_MEM_MB" ]]; then
+    echo "WARN: ${MEM_MB}MB RAM < ${MIN_MONITORING_MEM_MB}MB; disabling monitoring profile to keep instance reachable." >&2
+    COMPOSE_PROFILES=""
+  fi
+fi
+export COMPOSE_PROFILES
+
 compose() {
   docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" "$@"
 }
@@ -50,7 +70,7 @@ dump_diagnostics() {
   echo "Diagnostics: compose ps" >&2
   compose ps || true
   local svc
-  for svc in web mysql alertmanager prometheus; do
+  for svc in web mysql alertmanager prometheus grafana; do
     echo "--- compose logs --tail 120 ${svc} ---" >&2
     compose logs --tail 120 "$svc" 2>/dev/null || true
   done
@@ -81,7 +101,11 @@ if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
 fi
 
 echo "Build / pull imagenes..."
-compose build --parallel
+if [[ "${COMPOSE_BUILD_PARALLEL:-0}" == "1" ]]; then
+  compose build --parallel
+else
+  compose build
+fi
 compose pull --ignore-pull-failures || true
 
 echo "Levantando stack..."

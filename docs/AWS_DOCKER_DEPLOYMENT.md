@@ -47,7 +47,7 @@ flowchart LR
 
 | Archivo | Uso |
 |--------|-----|
-| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: sin bind-mount del código, MySQL sin puerto público, Prometheus/Grafana/Alertmanager solo en `127.0.0.1`. |
+| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: core (`web` + `mysql`) por defecto; monitorización bajo profile `monitoring`, sin puertos públicos. |
 | [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml) | Config Prometheus sin jobs `telegraf`/`cadvisor` (no están en este compose). |
 | [`.env.aws.example`](../.env.aws.example) | Plantilla de variables para el servidor; copiar a `.env` y rotar secretos. |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
@@ -86,7 +86,7 @@ Reglas **mínimas** (ajusta IPs):
 | 80 | ALB, Cloudflare o `0.0.0.0/0` si sirves HTTP directo | `web` |
 | 443 | Igual | Si terminas TLS en la instancia o proxy |
 
-**No** abras al mundo: **3306 (MySQL)**, **9090 (Prometheus)**, **3000 (Grafana)**, **9093 (Alertmanager)**, exporters. En [`docker-compose.aws.yml`](../docker-compose.aws.yml) la monitorización queda en **loopback** (`127.0.0.1`); acceso vía **túnel SSH** o proxy interno.
+**No** abras al mundo: **3306 (MySQL)**, **9090 (Prometheus)**, **3000 (Grafana)**, **9093 (Alertmanager)**, exporters. En [`docker-compose.aws.yml`](../docker-compose.aws.yml) la monitorización queda en **profile `monitoring`** y, si se activa, escucha en **loopback** (`127.0.0.1`); acceso vía **túnel SSH** o proxy interno.
 
 ## Despliegue manual en EC2
 
@@ -100,7 +100,7 @@ El script replica los pasos oficiales de AWS para instalar Docker en AL2023 ([*I
 
 Log del arranque: `/var/log/taller-ec2-bootstrap.log`. **Tras el primer arranque**, rota secretos en `.env`.
 
-El bootstrap usa **reintentos** en `dnf`/`curl`, comprueba `docker` / `docker compose` / `docker buildx` tras instalar plugins y, si el despliegue falla, deja en el log un volcado de `docker compose ps` y logs de `web`, `mysql`, `alertmanager` y `prometheus`. Puedes fijar versiones de fallback (si no basta el paquete `docker-compose-plugin` de AL2023) exportando antes del user data: `DOCKER_COMPOSE_VERSION` (por defecto `v5.1.3`), `DOCKER_BUILDX_VERSION` (por defecto `v0.19.3`).
+El bootstrap usa **reintentos** en `dnf`/`curl`, crea **swap persistente** (`SWAP_SIZE_GB=2` por defecto), comprueba `docker` / `docker compose` / `docker buildx` tras instalar plugins y, si el despliegue falla, deja en el log un volcado de `docker compose ps` y logs de `web`, `mysql`, `alertmanager`, `prometheus` y `grafana`. También instala `taller-docker-safe-mode.service`: en reinicios de instancias con poca RAM, desactiva contenedores de monitorización para mantener SSH/SSM accesible. Puedes fijar versiones de fallback (si no basta el paquete `docker-compose-plugin` de AL2023) exportando antes del user data: `DOCKER_COMPOSE_VERSION` (por defecto `v5.1.3`), `DOCKER_BUILDX_VERSION` (por defecto `v0.19.3`).
 
 **Si instalas a mano** (sin user data), equivalente al documento AWS:
 
@@ -160,16 +160,17 @@ Comprueba al menos:
 - `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `MYSQL_USER`, `MYSQL_DATABASE`
 - `GRAFANA_ADMIN_PASSWORD`
 - `APP_ENV=production`, `APP_DEBUG=false`
+- `DEPLOY_MONITORING=0` por defecto. Cambia a `DEPLOY_MONITORING=1` (o `COMPOSE_PROFILES=monitoring`) solo si la instancia tiene recursos suficientes.
 - SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
 
 #### 5) Levantar el stack
 
 ```bash
-docker compose -f docker-compose.aws.yml --env-file .env up -d --build
+./scripts/deploy_aws_docker.sh
 docker compose -f docker-compose.aws.yml ps
 ```
 
-La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Prometheus y Grafana escuchan solo en **localhost** del servidor.
+La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Prometheus y Grafana **no arrancan por defecto**; al activar `DEPLOY_MONITORING=1`, escuchan solo en **localhost** del servidor.
 
 ### Verificación y Grafana (tras Opción A con user data o tras Opción B §5)
 
@@ -177,6 +178,7 @@ La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80
 
 ```bash
 curl -sf http://127.0.0.1/ | head
+# Solo si DEPLOY_MONITORING=1:
 curl -sf http://127.0.0.1:9090/-/healthy
 ```
 
@@ -229,16 +231,33 @@ chmod +x scripts/deploy_aws_docker.sh
 Comportamiento:
 
 - Si ya existe el servicio `mysql`, intenta **backup** (`mysqldump` comprimido en `backups/`).
-- `docker compose build` + `pull` + `up -d`.
-- Comprueba HTTP en `/` y salud de Prometheus en loopback.
+- `docker compose build` (sin `--parallel` por defecto) + `pull` + `up -d`.
+- Comprueba HTTP en `/`; Prometheus solo se comprueba si está disponible en loopback.
 
 Variables útiles:
 
 - `SKIP_BACKUP=1` — omitir backup (primer despliegue o mantenimiento).
 - `COMPOSE_FILE=docker-compose.aws.yml` — por defecto ya es este archivo.
 - `PROJECT_DIR` — raíz del repo si ejecutas desde otro directorio.
+- `DEPLOY_MONITORING=1` o `COMPOSE_PROFILES=monitoring` — activar Prometheus/Grafana/exporters.
+- `MIN_MONITORING_MEM_MB=1900` — RAM mínima para no desactivar monitorización automáticamente.
+- `FORCE_MONITORING_ON_LOW_MEM=1` — fuerza monitorización aunque la instancia tenga poca RAM.
+- `COMPOSE_BUILD_PARALLEL=1` — build paralelo (no recomendado en instancias pequeñas).
 
 El script **no** hace `source .env` (evita romper contraseñas con `$`, `#`, espacios, etc.): pasa variables a Compose con `--env-file .env` cuando existe. Puertos para las comprobaciones locales (`WEB_HOST_PORT`, `PROMETHEUS_HOST_PORT`) se leen del mismo fichero sin evaluarlo como shell.
+
+### Modo anti-colapso / recovery
+
+Si la instancia se queda inaccesible tras levantar monitorización, usa SSM/SSH cuando vuelva a responder y ejecuta:
+
+```bash
+sudo /usr/local/sbin/taller-docker-safe-mode
+cd /opt/taller_mecanico_asir
+sed -i 's/^DEPLOY_MONITORING=.*/DEPLOY_MONITORING=0/' .env
+sudo docker compose --env-file .env -f docker-compose.aws.yml up -d --remove-orphans
+```
+
+En nuevos despliegues, el bootstrap ya deja swap persistente y habilita `taller-docker-safe-mode.service` para cortar monitorización en reinicios con poca RAM.
 
 ## Persistencia y copias de seguridad
 

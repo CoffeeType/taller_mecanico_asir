@@ -1,7 +1,7 @@
 # Stack orientado a EC2 + Docker Compose en AWS.
 # - Sin bind-mount del codigo completo (imagen build ./).
 # - MySQL y exporters NO expuestos al host; solo red Docker interna.
-# - Prometheus / Grafana / Alertmanager solo en loopback (SSH tunnel o proxy).
+# - Prometheus / Grafana / Alertmanager solo en loopback y bajo profile "monitoring".
 #
 # Uso: docker compose -f docker-compose.aws.yml --env-file .env up -d
 # Ver docs/AWS_DOCKER_DEPLOYMENT.md
@@ -9,6 +9,9 @@
 services:
   web:
     build: .
+    cpus: "${WEB_CPUS:-0.75}"
+    mem_limit: "${WEB_MEM_LIMIT:-512m}"
+    memswap_limit: "${WEB_MEMSWAP_LIMIT:-768m}"
     ports:
       - "${WEB_HOST_PORT:-80}:80"
     volumes:
@@ -38,6 +41,9 @@ services:
 
   mysql:
     image: mysql:8.0
+    cpus: "${MYSQL_CPUS:-0.75}"
+    mem_limit: "${MYSQL_MEM_LIMIT:-768m}"
+    memswap_limit: "${MYSQL_MEMSWAP_LIMIT:-1024m}"
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-trabajo_final_php}
@@ -58,6 +64,11 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.11.3
+    profiles:
+      - monitoring
+    cpus: "${PROMETHEUS_CPUS:-0.35}"
+    mem_limit: "${PROMETHEUS_MEM_LIMIT:-384m}"
+    memswap_limit: "${PROMETHEUS_MEMSWAP_LIMIT:-512m}"
     volumes:
       - ./monitoring/prometheus/prometheus.aws.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -66,6 +77,7 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-512MB}"
       - "--web.console.libraries=/usr/share/prometheus/console_libraries"
       - "--web.console.templates=/usr/share/prometheus/consoles"
     restart: unless-stopped
@@ -79,6 +91,11 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.32.1
+    profiles:
+      - monitoring
+    cpus: "${ALERTMANAGER_CPUS:-0.15}"
+    mem_limit: "${ALERTMANAGER_MEM_LIMIT:-128m}"
+    memswap_limit: "${ALERTMANAGER_MEMSWAP_LIMIT:-192m}"
     volumes:
       # Must match path expected by alertmanager-entrypoint.sh (`/etc/alertmanager/config/alertmanager.yml`)
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/config/alertmanager.yml:ro
@@ -103,6 +120,11 @@ services:
 
   grafana:
     image: grafana/grafana:13.0.1
+    profiles:
+      - monitoring
+    cpus: "${GRAFANA_CPUS:-0.35}"
+    mem_limit: "${GRAFANA_MEM_LIMIT:-384m}"
+    memswap_limit: "${GRAFANA_MEMSWAP_LIMIT:-512m}"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
@@ -121,12 +143,22 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.11.1
+    profiles:
+      - monitoring
+    cpus: "${NODE_EXPORTER_CPUS:-0.10}"
+    mem_limit: "${NODE_EXPORTER_MEM_LIMIT:-96m}"
+    memswap_limit: "${NODE_EXPORTER_MEMSWAP_LIMIT:-128m}"
     restart: unless-stopped
     networks:
       - app-network
 
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.19.0
+    profiles:
+      - monitoring
+    cpus: "${MYSQLD_EXPORTER_CPUS:-0.15}"
+    mem_limit: "${MYSQLD_EXPORTER_MEM_LIMIT:-128m}"
+    memswap_limit: "${MYSQLD_EXPORTER_MEMSWAP_LIMIT:-192m}"
     environment:
       - MYSQL_HOST=${MYSQL_HOST:-mysql}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
@@ -147,6 +179,11 @@ services:
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.26.0
+    profiles:
+      - monitoring
+    cpus: "${BLACKBOX_EXPORTER_CPUS:-0.10}"
+    mem_limit: "${BLACKBOX_EXPORTER_MEM_LIMIT:-96m}"
+    memswap_limit: "${BLACKBOX_EXPORTER_MEMSWAP_LIMIT:-128m}"
     command:
       - '--config.file=/config/blackbox.yml'
     volumes:

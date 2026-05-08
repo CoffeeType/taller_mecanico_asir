@@ -36,6 +36,81 @@ retry() {
   return 1
 }
 
+ensure_swap() {
+  local size_gb="${SWAP_SIZE_GB:-2}"
+  local swap_file="${SWAP_FILE:-/swapfile}"
+
+  if [[ "${ENABLE_SWAP:-1}" != "1" ]]; then
+    echo "Swap disabled (ENABLE_SWAP=${ENABLE_SWAP})."
+    return 0
+  fi
+
+  if swapon --show=NAME | grep -qx "$swap_file"; then
+    echo "Swap already active at ${swap_file}."
+    return 0
+  fi
+
+  if [[ ! -f "$swap_file" ]]; then
+    echo "Creating ${size_gb}G swap at ${swap_file} to avoid OOM during Docker bootstrap."
+    fallocate -l "${size_gb}G" "$swap_file" || dd if=/dev/zero of="$swap_file" bs=1M count="$((size_gb * 1024))"
+    chmod 600 "$swap_file"
+    mkswap "$swap_file"
+  fi
+
+  swapon "$swap_file" || true
+  if ! grep -qF "${swap_file} none swap" /etc/fstab; then
+    echo "${swap_file} none swap sw 0 0" >> /etc/fstab
+  fi
+
+  cat >/etc/sysctl.d/99-taller-swap.conf <<'EOF'
+vm.swappiness = 10
+vm.vfs_cache_pressure = 50
+EOF
+  sysctl --system >/dev/null || true
+  free -h || true
+}
+
+install_resource_guard() {
+  cat >/usr/local/sbin/taller-docker-safe-mode <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+MIN_MB="${MIN_MONITORING_MEM_MB:-1900}"
+FORCE="${FORCE_MONITORING_ON_LOW_MEM:-0}"
+MEM_MB="$(awk '/MemTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null || printf '0')"
+
+if [[ "$FORCE" == "1" || "$MEM_MB" -eq 0 || "$MEM_MB" -ge "$MIN_MB" ]]; then
+  exit 0
+fi
+
+echo "Low memory (${MEM_MB}MB < ${MIN_MB}MB). Disabling monitoring containers to keep EC2 reachable."
+mapfile -t containers < <(docker ps -a --format '{{.Names}}' | grep -E '^taller_mecanico_asir-(prometheus|grafana|alertmanager|node-exporter|mysqld-exporter|blackbox-exporter)-1$' || true)
+if [[ "${#containers[@]}" -eq 0 ]]; then
+  exit 0
+fi
+
+docker update --restart=no "${containers[@]}" >/dev/null || true
+docker stop --time 15 "${containers[@]}" >/dev/null || true
+EOF
+  chmod +x /usr/local/sbin/taller-docker-safe-mode
+
+  cat >/etc/systemd/system/taller-docker-safe-mode.service <<'EOF'
+[Unit]
+Description=Disable non-core Docker monitoring containers on low-memory EC2
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/taller-docker-safe-mode
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable taller-docker-safe-mode.service
+}
+
 # --- Config (edit if needed) ---
 REPO_URL="https://github.com/CoffeeType/taller_mecanico_asir.git"
 GIT_REF="main"
@@ -46,6 +121,9 @@ TARGET_DIR="/opt/taller_mecanico_asir"
 # Pin fallback CLI plugins (override if Compose demands newer Buildx).
 DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-v5.1.3}"
 DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
+
+# Small EC2 instances can lock up while building/pulling and starting MySQL + monitoring.
+ensure_swap
 
 # AWS ECS / AL2023: “Update the installed packages and package cache” (yum update -y).
 retry 5 20 dnf update -y
@@ -61,6 +139,7 @@ fi
 
 # AWS ECS: “Start the Docker service” (service docker start). On systemd, enable so it survives reboot:
 systemctl enable --now docker
+install_resource_guard
 
 # AWS ECS: add ec2-user to docker group (logout/login applies group; deploy runs as root here).
 usermod -a -G docker "${BOOT_USER}" || true
@@ -121,13 +200,14 @@ deploy_hook_fail() {
   echo "ERROR: deploy_aws_docker.sh failed; extra diagnostics:" >&2
   docker compose --env-file .env -f docker-compose.aws.yml ps || true
   local s
-  for s in web mysql alertmanager prometheus; do
+  for s in web mysql alertmanager prometheus grafana; do
     echo "--- logs ${s} ---" >&2
     docker compose --env-file .env -f docker-compose.aws.yml logs --tail 120 "${s}" 2>/dev/null || true
   done
 }
 
-if ! SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh; then
+# Core profile by default: web + mysql only. Set COMPOSE_PROFILES=monitoring in .env to start observability stack.
+if ! SKIP_BACKUP=1 COMPOSE_PROFILES="${COMPOSE_PROFILES:-}" ./scripts/deploy_aws_docker.sh; then
   deploy_hook_fail
   exit 1
 fi
