@@ -48,6 +48,129 @@ read_env_var() {
   printf '%s' "$default"
 }
 
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  local file="$PROJECT_DIR/.env"
+  [[ -f "$file" ]] || touch "$file"
+  if grep -qE "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+metadata_token() {
+  curl -sf --max-time 2 -X PUT \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 60" \
+    "http://169.254.169.254/latest/api/token" 2>/dev/null || true
+}
+
+metadata_get() {
+  local path="$1"
+  local token
+  token="$(metadata_token)"
+  if [[ -n "$token" ]]; then
+    curl -sf --max-time 2 -H "X-aws-ec2-metadata-token: ${token}" \
+      "http://169.254.169.254/latest/meta-data/${path}" 2>/dev/null || true
+  else
+    curl -sf --max-time 2 "http://169.254.169.254/latest/meta-data/${path}" 2>/dev/null || true
+  fi
+}
+
+public_browser_host() {
+  local host
+  host="$(read_env_var PUBLIC_ACCESS_HOST "${PUBLIC_ACCESS_HOST:-}")"
+  [[ -n "$host" ]] || host="$(metadata_get public-hostname)"
+  [[ -n "$host" ]] || host="$(metadata_get public-ipv4)"
+  [[ -n "$host" ]] || host="PUBLIC_IP_O_DNS"
+  printf '%s' "$host"
+}
+
+normalize_public_access_env() {
+  local host prometheus_port grafana_port alertmanager_port traffic_ui_port
+  host="$(public_browser_host)"
+  prometheus_port="$(read_env_var PROMETHEUS_HOST_PORT 9090)"
+  grafana_port="$(read_env_var GRAFANA_HOST_PORT 3000)"
+  alertmanager_port="$(read_env_var ALERTMANAGER_HOST_PORT 9093)"
+  traffic_ui_port="$(read_env_var TRAFFIC_SIMULATOR_UI_HOST_PORT 8890)"
+
+  if [[ "$WANT_MONITORING" == "1" || "$WANT_TRAFFIC" == "1" ]]; then
+    set_env_value MONITORING_UI_HOST_BIND "0.0.0.0"
+    set_env_value EXPORTER_HOST_BIND "127.0.0.1"
+    export MONITORING_UI_HOST_BIND="0.0.0.0"
+    export EXPORTER_HOST_BIND="127.0.0.1"
+  fi
+
+  if [[ "$WANT_MONITORING" == "1" ]]; then
+    set_env_value PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
+    set_env_value GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"
+    export PROMETHEUS_EXTERNAL_URL="http://${host}:${prometheus_port}"
+    export GRAFANA_EXTERNAL_URL="http://${host}:${grafana_port}"
+  fi
+
+  if [[ "$WANT_TRAFFIC" == "1" ]]; then
+    set_env_value TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "http://${host}:${traffic_ui_port}"
+    export TRAFFIC_SIMULATOR_UI_EXTERNAL_URL="http://${host}:${traffic_ui_port}"
+  fi
+}
+
+authorize_public_ui_ingress() {
+  local cidr region az mac sg port out
+  command -v aws >/dev/null 2>&1 || { echo "WARN: aws CLI no disponible; no se abre Security Group automaticamente." >&2; return 0; }
+  cidr="$(read_env_var MONITORING_SG_CIDR "0.0.0.0/0")"
+  az="$(metadata_get placement/availability-zone)"
+  [[ -n "$az" ]] || { echo "WARN: no se pudo detectar region EC2; omito Security Group automatico." >&2; return 0; }
+  region="${az::-1}"
+  mac="$(metadata_get network/interfaces/macs/ | head -1 | tr -d '/')"
+  [[ -n "$mac" ]] || { echo "WARN: no se pudo detectar interfaz EC2; omito Security Group automatico." >&2; return 0; }
+  for sg in $(metadata_get "network/interfaces/macs/${mac}/security-group-ids"); do
+    for port in "$GRAFANA_HOST_PORT" "$PROMETHEUS_HOST_PORT" "$ALERTMANAGER_HOST_PORT" "$TRAFFIC_UI_PORT"; do
+      [[ -z "$port" ]] && continue
+      if out="$(aws ec2 authorize-security-group-ingress --region "$region" --group-id "$sg" --protocol tcp --port "$port" --cidr "$cidr" 2>&1)"; then
+        echo "OK: Security Group ${sg} permite tcp/${port} desde ${cidr}"
+      elif [[ "$out" == *InvalidPermission.Duplicate* ]]; then
+        echo "OK: Security Group ${sg} ya permitia tcp/${port} desde ${cidr}"
+      else
+        echo "WARN: no pude abrir tcp/${port} en ${sg}: ${out}" >&2
+      fi
+    done
+  done
+}
+
+assert_public_port_bind() {
+  local svc="$1"
+  local container_port="$2"
+  local host_port="$3"
+  local out
+  out="$(compose port "$svc" "$container_port" 2>/dev/null || true)"
+  if [[ -z "$out" ]]; then
+    echo "WARN: no pude leer bind de ${svc}:${container_port}" >&2
+    return 0
+  fi
+  if [[ "$out" == 127.0.0.1:* || "$out" == localhost:* ]]; then
+    echo "ERROR: ${svc}:${container_port} sigue en loopback (${out}); debe ser publico para navegador." >&2
+    return 1
+  fi
+  echo "OK: ${svc}:${container_port} publicado en ${out}"
+}
+
+print_browser_urls() {
+  local host
+  host="$(public_browser_host)"
+  echo
+  echo "URLs navegador:"
+  if [[ "$WANT_MONITORING" == "1" ]]; then
+    echo "  Grafana:      http://${host}:${GRAFANA_HOST_PORT}"
+    echo "  Prometheus:   http://${host}:${PROMETHEUS_HOST_PORT}"
+    echo "  Alertmanager: http://${host}:${ALERTMANAGER_HOST_PORT}"
+  fi
+  if [[ "$WANT_TRAFFIC" == "1" ]]; then
+    echo "  Traffic UI:   http://${host}:${TRAFFIC_UI_PORT}"
+  fi
+  echo "Si no abre desde navegador, revisa Security Group/IAM: puertos ${GRAFANA_HOST_PORT},${PROMETHEUS_HOST_PORT},${ALERTMANAGER_HOST_PORT},${TRAFFIC_UI_PORT}."
+}
+
 # Pin si no hay .env / API (debe coincidir con docker-compose.aws.yml :-${CADVISOR_IMAGE_TAG:-...}).
 CADVISOR_IMAGE_TAG_FALLBACK="${CADVISOR_IMAGE_TAG_FALLBACK:-0.56.2}"
 
@@ -217,6 +340,7 @@ fi
 
 export COMPOSE_PROFILES
 
+normalize_public_access_env
 resolve_and_export_cadvisor_image_tag
 
 dump_diagnostics() {
@@ -239,6 +363,8 @@ ALERTMANAGER_HOST_PORT="$(read_env_var ALERTMANAGER_HOST_PORT 9093)"
 TRAFFIC_UI_PORT="$(read_env_var TRAFFIC_SIMULATOR_UI_HOST_PORT 8890)"
 CADVISOR_HOST_PORT="$(read_env_var CADVISOR_HOST_PORT 8080)"
 TELEGRAF_HOST_PORT="$(read_env_var TELEGRAF_HOST_PORT 9273)"
+
+authorize_public_ui_ingress
 
 strict_secret_fail() {
   echo "ERROR: ${1}" >&2
@@ -418,11 +544,17 @@ if [[ "$WANT_MONITORING" == "1" ]]; then
   echo "OK: Grafana health (localhost)"
   curl -sf "http://127.0.0.1:${ALERTMANAGER_HOST_PORT}/-/healthy" >/dev/null || { echo "ERROR: Alertmanager no healthy" >&2; exit 1; }
   echo "OK: Alertmanager healthy (localhost)"
+  assert_public_port_bind grafana 3000 "$GRAFANA_HOST_PORT"
+  assert_public_port_bind prometheus 9090 "$PROMETHEUS_HOST_PORT"
+  assert_public_port_bind alertmanager 9093 "$ALERTMANAGER_HOST_PORT"
 fi
 
 if [[ "$WANT_TRAFFIC" == "1" ]]; then
   curl -sf "http://127.0.0.1:${TRAFFIC_UI_PORT}/health.php" >/dev/null || { echo "ERROR: traffic-simulator-ui /health.php no responde" >&2; exit 1; }
   echo "OK: traffic-simulator-ui health (localhost:${TRAFFIC_UI_PORT})"
+  assert_public_port_bind traffic-simulator-ui 80 "$TRAFFIC_UI_PORT"
 fi
+
+print_browser_urls
 
 echo "Deploy completado."

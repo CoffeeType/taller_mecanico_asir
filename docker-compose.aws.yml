@@ -1,9 +1,8 @@
 # Stack orientado a EC2 + Docker Compose en AWS.
 # - Sin bind-mount del codigo completo (imagen build ./).
 # - MySQL y exporters NO expuestos al host; solo red Docker interna.
-# - Monitorizacion (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf)
-#   bajo profile "monitoring" y puertos en loopback (tunel SSH).
-# - Simulador de trafico bajo profile "traffic"; UI en loopback por defecto.
+# - UIs de monitorizacion y simulador publicas por defecto (MONITORING_UI_HOST_BIND=0.0.0.0).
+# - Exporters tecnicos en loopback por defecto (EXPORTER_HOST_BIND=127.0.0.1).
 #
 # Uso: docker compose -f docker-compose.aws.yml --env-file .env --profile monitoring --profile traffic up -d
 # O export COMPOSE_PROFILES=monitoring,traffic
@@ -90,7 +89,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090"
+      - "${MONITORING_UI_HOST_BIND:-0.0.0.0}:${PROMETHEUS_HOST_PORT:-9090}:9090"
 
   alertmanager:
     image: prom/alertmanager:v0.32.1
@@ -119,7 +118,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:${ALERTMANAGER_HOST_PORT:-9093}:9093"
+      - "${MONITORING_UI_HOST_BIND:-0.0.0.0}:${ALERTMANAGER_HOST_PORT:-9093}:9093"
 
   grafana:
     image: grafana/grafana:13.0.1
@@ -142,7 +141,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:${GRAFANA_HOST_PORT:-3000}:3000"
+      - "${MONITORING_UI_HOST_BIND:-0.0.0.0}:${GRAFANA_HOST_PORT:-3000}:3000"
 
   node-exporter:
     image: prom/node-exporter:v1.11.1
@@ -228,7 +227,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:${CADVISOR_HOST_PORT:-8080}:8080"
+      - "${EXPORTER_HOST_BIND:-127.0.0.1}:${CADVISOR_HOST_PORT:-8080}:8080"
 
   telegraf:
     image: telegraf:latest
@@ -250,7 +249,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:${TELEGRAF_HOST_PORT:-9273}:9273"
+      - "${EXPORTER_HOST_BIND:-127.0.0.1}:${TELEGRAF_HOST_PORT:-9273}:9273"
 
   traffic-simulator:
     build:
@@ -294,7 +293,7 @@ services:
     mem_limit: "${TRAFFIC_SIMULATOR_UI_MEM_LIMIT:-128m}"
     memswap_limit: "${TRAFFIC_SIMULATOR_UI_MEMSWAP_LIMIT:-192m}"
     ports:
-      - "127.0.0.1:${TRAFFIC_SIMULATOR_UI_HOST_PORT:-8890}:80"
+      - "${MONITORING_UI_HOST_BIND:-0.0.0.0}:${TRAFFIC_SIMULATOR_UI_HOST_PORT:-8890}:80"
     environment:
       - SIMULATOR_CONTAINER_URL=http://traffic-simulator:8085
       - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}

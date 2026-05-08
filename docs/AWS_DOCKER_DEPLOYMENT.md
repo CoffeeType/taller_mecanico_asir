@@ -47,7 +47,7 @@ flowchart LR
 
 | Archivo | Uso |
 |--------|-----|
-| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y simulador de tráfico + UI. Puertos de monitorización y UI de tráfico en **loopback** (`127.0.0.1`); HTTP app en `WEB_HOST_PORT`. |
+| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y simulador de tráfico + UI. Grafana/Prometheus/Alertmanager/UI simulador escuchan en `MONITORING_UI_HOST_BIND=0.0.0.0`; cAdvisor/Telegraf quedan privados en `EXPORTER_HOST_BIND=127.0.0.1`. |
 | [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml) | Config Prometheus alineada con el compose AWS (incluye jobs `telegraf` y `cadvisor`). |
 | [`.env.aws.example`](../.env.aws.example) | Plantilla full stack; copiar a `.env` y **rotar secretos** (o `SKIP_SECRET_STRICT_CHECK=1` solo en laboratorio). |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
@@ -87,8 +87,23 @@ Reglas **mínimas** (ajusta IPs):
 | 22 | Tu IP / bastión | SSH (o cierra SSH y usa SSM) |
 | 80 | ALB, Cloudflare o `0.0.0.0/0` si sirves HTTP directo | `web` |
 | 443 | Igual | Si terminas TLS en la instancia o proxy |
+| 3000 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Grafana |
+| 9090 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Prometheus |
+| 9093 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Alertmanager |
+| 8890 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | UI simulador de tráfico |
 
-**No** abras al mundo: **3306 (MySQL)**, **9090 (Prometheus)**, **3000 (Grafana)**, **9093 (Alertmanager)**, exporters. En [`docker-compose.aws.yml`](../docker-compose.aws.yml) la monitorización queda en **profile `monitoring`** y, si se activa, escucha en **loopback** (`127.0.0.1`); acceso vía **túnel SSH** o proxy interno.
+**No** abras MySQL ni exporters: **3306**, **8080 (cAdvisor)**, **9273 (Telegraf)**, **9100/9104/9115**. Prometheus y Alertmanager no tienen login fuerte por defecto; el script abre puertos UI de forma automática si tiene IAM/`awscli`, pero debes restringir `MONITORING_SG_CIDR` a tu IP/CIDR cuando sea posible.
+
+### Acceso navegador directo
+
+Con el `.env.aws.example`, el despliegue deja las UIs accesibles por IP/DNS público:
+
+- Grafana: `http://IP_PUBLICA:3000`
+- Prometheus: `http://IP_PUBLICA:9090`
+- Alertmanager: `http://IP_PUBLICA:9093`
+- UI simulador de tráfico: `http://IP_PUBLICA:8890`
+
+`scripts/deploy_aws_docker.sh` imprime estas URLs al final. Si hay permisos IAM, también autoriza reglas del Security Group para `3000`, `9090`, `9093`, `8890` usando `MONITORING_SG_CIDR` (por defecto `0.0.0.0/0` en laboratorio).
 
 ## Despliegue manual en EC2
 
@@ -184,7 +199,7 @@ ENV_FILE=.env ./scripts/verify_aws_stack.sh
 docker compose -f docker-compose.aws.yml ps
 ```
 
-La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y simulador de tráfico; Prometheus, Grafana, Alertmanager, cAdvisor, Telegraf y la UI del simulador escuchan en **127.0.0.1** del servidor (túnel SSH). Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
+La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y simulador de tráfico; Prometheus, Grafana, Alertmanager y la UI del simulador quedan accesibles en navegador por IP pública si el Security Group lo permite. cAdvisor y Telegraf siguen privados. Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
 
 ### Verificación y Grafana (tras Opción A con user data o tras Opción B §5)
 
@@ -192,23 +207,14 @@ La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80
 
 ```bash
 curl -sf http://127.0.0.1/ | head
-# Con perfiles monitoring (puertos por defecto en loopback):
+# Con perfiles monitoring:
 curl -sf http://127.0.0.1:9090/-/healthy
 curl -sf http://127.0.0.1:3000/api/health
-# Con perfil traffic (UI en loopback, puerto TRAFFIC_SIMULATOR_UI_HOST_PORT):
+# Con perfil traffic (UI, puerto TRAFFIC_SIMULATOR_UI_HOST_PORT):
 curl -sf http://127.0.0.1:8890/health.php
 ```
 
-(Desde fuera: `http://IP_PUBLICA/` si el SG permite 80.)
-
-#### Acceso a Grafana por túnel SSH
-
-Usuario SSH según AMI: **`ec2-user`** (Amazon Linux) o **`ubuntu`** (Ubuntu).
-
-```bash
-ssh -L 3000:127.0.0.1:3000 ec2-user@IP_PUBLICA
-# Navegador local: http://127.0.0.1:3000
-```
+(Desde fuera: `http://IP_PUBLICA/`, `http://IP_PUBLICA:3000`, `http://IP_PUBLICA:9090`, `http://IP_PUBLICA:9093`, `http://IP_PUBLICA:8890` si el SG lo permite.)
 
 ## HTTPS y dominio
 

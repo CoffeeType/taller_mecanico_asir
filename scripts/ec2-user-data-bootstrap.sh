@@ -121,6 +121,34 @@ read_env_value() {
   return 1
 }
 
+metadata_token() {
+  curl -sf --max-time 2 -X PUT \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 60" \
+    "http://169.254.169.254/latest/api/token" 2>/dev/null || true
+}
+
+metadata_get() {
+  local path="$1"
+  local token
+  token="$(metadata_token)"
+  if [[ -n "$token" ]]; then
+    curl -sf --max-time 2 -H "X-aws-ec2-metadata-token: ${token}" \
+      "http://169.254.169.254/latest/meta-data/${path}" 2>/dev/null || true
+  else
+    curl -sf --max-time 2 "http://169.254.169.254/latest/meta-data/${path}" 2>/dev/null || true
+  fi
+}
+
+public_browser_host() {
+  local file="$1"
+  local host
+  host="$(read_env_value "$file" PUBLIC_ACCESS_HOST || true)"
+  [[ -n "$host" ]] || host="$(metadata_get public-hostname)"
+  [[ -n "$host" ]] || host="$(metadata_get public-ipv4)"
+  [[ -n "$host" ]] || host="PUBLIC_IP_O_DNS"
+  printf '%s' "$host"
+}
+
 seed_env_secret_if_placeholder() {
   local file="$1"
   local key="$2"
@@ -155,12 +183,50 @@ raise_env_min_if_lower() {
 
 normalize_env_defaults() {
   local file="$1"
+  local host prometheus_port grafana_port alertmanager_port traffic_ui_port
   raise_env_min_if_lower "$file" MIN_MONITORING_MEM_MB 3200
   raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 3600
+  set_env_value "$file" MONITORING_UI_HOST_BIND "0.0.0.0"
+  set_env_value "$file" EXPORTER_HOST_BIND "127.0.0.1"
   # cAdvisor GHCR: tag semver sin prefijo v (deploy normaliza si falta).
   if ! grep -qE '^CADVISOR_IMAGE_TAG=' "$file"; then
     set_env_value "$file" CADVISOR_IMAGE_TAG "0.56.2"
   fi
+  host="$(public_browser_host "$file")"
+  prometheus_port="$(read_env_value "$file" PROMETHEUS_HOST_PORT || printf '9090')"
+  grafana_port="$(read_env_value "$file" GRAFANA_HOST_PORT || printf '3000')"
+  alertmanager_port="$(read_env_value "$file" ALERTMANAGER_HOST_PORT || printf '9093')"
+  traffic_ui_port="$(read_env_value "$file" TRAFFIC_SIMULATOR_UI_HOST_PORT || printf '8890')"
+  set_env_value "$file" PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
+  set_env_value "$file" GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"
+  set_env_value "$file" TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "http://${host}:${traffic_ui_port}"
+}
+
+authorize_public_ui_ingress() {
+  local file="$1"
+  local cidr region az mac sg port out
+  command -v aws >/dev/null 2>&1 || { echo "WARN: aws CLI no disponible; no se abre Security Group automaticamente." >&2; return 0; }
+  cidr="$(read_env_value "$file" MONITORING_SG_CIDR || printf '0.0.0.0/0')"
+  az="$(metadata_get placement/availability-zone)"
+  [[ -n "$az" ]] || { echo "WARN: no se pudo detectar region EC2; omito Security Group automatico." >&2; return 0; }
+  region="${az::-1}"
+  mac="$(metadata_get network/interfaces/macs/ | head -1 | tr -d '/')"
+  [[ -n "$mac" ]] || { echo "WARN: no se pudo detectar interfaz EC2; omito Security Group automatico." >&2; return 0; }
+  for sg in $(metadata_get "network/interfaces/macs/${mac}/security-group-ids"); do
+    for port in \
+      "$(read_env_value "$file" GRAFANA_HOST_PORT || printf '3000')" \
+      "$(read_env_value "$file" PROMETHEUS_HOST_PORT || printf '9090')" \
+      "$(read_env_value "$file" ALERTMANAGER_HOST_PORT || printf '9093')" \
+      "$(read_env_value "$file" TRAFFIC_SIMULATOR_UI_HOST_PORT || printf '8890')"; do
+      if out="$(aws ec2 authorize-security-group-ingress --region "$region" --group-id "$sg" --protocol tcp --port "$port" --cidr "$cidr" 2>&1)"; then
+        echo "OK: Security Group ${sg} permite tcp/${port} desde ${cidr}"
+      elif [[ "$out" == *InvalidPermission.Duplicate* ]]; then
+        echo "OK: Security Group ${sg} ya permitia tcp/${port} desde ${cidr}"
+      else
+        echo "WARN: no pude abrir tcp/${port} en ${sg}: ${out}" >&2
+      fi
+    done
+  done
 }
 
 # --- Config (edit if needed) ---
@@ -204,6 +270,8 @@ retry 5 20 dnf update -y
 # Extra tooling for this project (not in ECS Docker snippet): Instance Connect + git + httpd fallback.
 # Do not install package `curl`: AL2023 ships curl-minimal (/usr/bin/curl); package `curl` conflicts with it.
 retry 5 10 dnf install -y ec2-instance-connect git httpd
+# awscli enables best-effort Security Group automation; deploy continues without it.
+retry 3 10 dnf install -y awscli || true
 # Docker publishes the app on port 80; keep host httpd installed but inactive unless used manually.
 systemctl disable --now httpd || true
 
@@ -276,6 +344,7 @@ seed_env_secrets "${TARGET_DIR}/.env"
 normalize_env_defaults "${TARGET_DIR}/.env"
 chown "${BOOT_USER}:${BOOT_USER}" "${TARGET_DIR}/.env"
 chmod 600 "${TARGET_DIR}/.env"
+authorize_public_ui_ingress "${TARGET_DIR}/.env"
 
 install_resource_guard
 
