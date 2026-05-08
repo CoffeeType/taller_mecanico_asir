@@ -122,8 +122,10 @@ fi
 # AWS ECS: “Start the Docker service” (service docker start). On systemd, enable so it survives reboot:
 systemctl enable --now docker
 
-# AWS ECS: add ec2-user to docker group (logout/login applies group; deploy runs as root here).
-usermod -a -G docker "${BOOT_USER}" || true
+# AWS ECS: add ec2-user to docker group. Equivalent manual command:
+#   sudo usermod -aG docker ec2-user
+# Then close the SSH session with `exit` and reconnect so group membership applies.
+usermod -aG docker "${BOOT_USER}" || true
 
 # Docker Compose V2: not in the ECS “install Docker” steps above.
 mkdir -p /usr/libexec/docker/cli-plugins
@@ -197,4 +199,4 @@ if ! SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh; then
 fi
 
 echo "Bootstrap done. Log: /var/log/taller-ec2-bootstrap.log"
-echo "Note for SSH: user ${BOOT_USER} was added to group docker. Open a NEW SSH session (or run: newgrp docker) before using docker without sudo."
+echo "Note for SSH: user ${BOOT_USER} was added to group docker. Run 'exit' and open a NEW SSH session (or run: newgrp docker) before using docker without sudo."
