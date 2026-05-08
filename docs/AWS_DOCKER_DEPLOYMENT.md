@@ -100,6 +100,8 @@ El script replica los pasos oficiales de AWS para instalar Docker en AL2023 ([*I
 
 Log del arranque: `/var/log/taller-ec2-bootstrap.log`. **Tras el primer arranque**, rota secretos en `.env`.
 
+El bootstrap usa **reintentos** en `dnf`/`curl`, comprueba `docker` / `docker compose` / `docker buildx` tras instalar plugins y, si el despliegue falla, deja en el log un volcado de `docker compose ps` y logs de `web`, `mysql`, `alertmanager` y `prometheus`. Puedes fijar versiones de fallback (si no basta el paquete `docker-compose-plugin` de AL2023) exportando antes del user data: `DOCKER_COMPOSE_VERSION` (por defecto `v5.1.3`), `DOCKER_BUILDX_VERSION` (por defecto `v0.19.3`).
+
 **Si instalas a mano** (sin user data), equivalente al documento AWS:
 
 ```bash
@@ -158,7 +160,7 @@ Comprueba al menos:
 - `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `MYSQL_USER`, `MYSQL_DATABASE`
 - `GRAFANA_ADMIN_PASSWORD`
 - `APP_ENV=production`, `APP_DEBUG=false`
-- SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`)
+- SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
 
 #### 5) Levantar el stack
 
@@ -236,6 +238,8 @@ Variables útiles:
 - `COMPOSE_FILE=docker-compose.aws.yml` — por defecto ya es este archivo.
 - `PROJECT_DIR` — raíz del repo si ejecutas desde otro directorio.
 
+El script **no** hace `source .env` (evita romper contraseñas con `$`, `#`, espacios, etc.): pasa variables a Compose con `--env-file .env` cuando existe. Puertos para las comprobaciones locales (`WEB_HOST_PORT`, `PROMETHEUS_HOST_PORT`) se leen del mismo fichero sin evaluarlo como shell.
+
 ## Persistencia y copias de seguridad
 
 Volúmenes Docker nombrados en el compose: datos de MySQL, Prometheus, Grafana, Alertmanager, imágenes subidas, logs y caché de la app.
@@ -263,6 +267,9 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 | Prometheus “down” para algún target | `docker compose logs prometheus`; revisar que los nombres de servicio coinciden con `prometheus.aws.yml`. |
 | Grafana inaccesible desde fuera | Es **normal**: solo `127.0.0.1` en el host; usar túnel SSH o reverso seguro. |
 | `compose build requires buildx 0.17.0 or later` (AL2023) | El RPM `docker` puede traer Buildx antiguo. Instala plugin ≥ 0.17, p. ej. `curl` del release [buildx](https://github.com/docker/buildx/releases) a `/usr/libexec/docker/cli-plugins/docker-buildx` + `chmod +x`; el bootstrap ya fuerza Buildx reciente. Luego `SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh`. |
+| Alertmanager cae al arrancar / Prometheus no levanta | Comprueba montaje en [`docker-compose.aws.yml`](../docker-compose.aws.yml) (`alertmanager.yml` → `/etc/alertmanager/config/alertmanager.yml`) y logs: `docker compose logs alertmanager`. Sin correo configurado debe usarse config noop (entrypoint). |
+| `missing to address in email config` (Alertmanager) | Rellena `ALERT_EMAIL_TO` **y** como mínimo `SMTP_SMARTHOST` y `SMTP_FROM`, o deja correo vacío para modo noop hasta configurar SMTP. |
+| Fallos raros al cargar `.env` en el despliegue | No edites `.env` con sintaxis rara en una sola línea; el deploy ya no hace `source .env`. Usa `docker compose ... --env-file .env` explícitamente si llamas a Compose a mano. |
 | `permission denied` al conectar a `/var/run/docker.sock` como `ec2-user` | Tras `usermod -a -G docker`, la sesión SSH **abierta** no recibe el grupo hasta **nueva conexión SSH** o `newgrp docker`. Comprueba `groups`. Temporalmente: `sudo docker ps`. ([Guía AWS — mismo aviso tras añadir el usuario al grupo `docker`](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker).) |
 
 ## Evolución recomendada

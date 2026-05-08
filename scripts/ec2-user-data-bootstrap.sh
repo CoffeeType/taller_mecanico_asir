@@ -12,10 +12,29 @@
 # Paste as plain text in “User data”; do not enable “already base64 encoded” unless you encoded the file.
 # Log: /var/log/taller-ec2-bootstrap.log
 # After boot: rotate secrets in /opt/taller_mecanico_asir/.env (from .env.aws.example).
+#
+# Optional env (export before user data or inject via cloud-init env): overrides for plugin versions.
 # -----------------------------------------------------------------------------
 
 exec > >(tee /var/log/taller-ec2-bootstrap.log) 2>&1
 set -euxo pipefail
+
+retry() {
+  local max="${1:-5}"
+  shift
+  local delay="${1:-15}"
+  shift
+  local i=1
+  while [[ "$i" -le "$max" ]]; do
+    if "$@"; then
+      return 0
+    fi
+    echo "WARN: attempt ${i}/${max} failed: $* ; sleeping ${delay}s" >&2
+    sleep "$delay"
+    i=$((i + 1))
+  done
+  return 1
+}
 
 # --- Config (edit if needed) ---
 REPO_URL="https://github.com/CoffeeType/taller_mecanico_asir.git"
@@ -24,16 +43,20 @@ GIT_REF="main"
 BOOT_USER="ec2-user"
 TARGET_DIR="/opt/taller_mecanico_asir"
 
+# Pin fallback CLI plugins (override if Compose demands newer Buildx).
+DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-v5.1.3}"
+DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
+
 # AWS ECS / AL2023: “Update the installed packages and package cache” (yum update -y).
-dnf update -y
+retry 5 20 dnf update -y
 
 # Extra tooling for this project (not in ECS Docker snippet): Instance Connect + git.
 # Do not install package `curl`: AL2023 ships curl-minimal (/usr/bin/curl); package `curl` conflicts with it.
-dnf install -y ec2-instance-connect git
+retry 5 10 dnf install -y ec2-instance-connect git
 
 # AWS ECS / AL2023: “Install the most recent Docker Community Edition package” (yum install docker).
 if ! command -v docker >/dev/null 2>&1; then
-  dnf install -y docker
+  retry 5 10 dnf install -y docker
 fi
 
 # AWS ECS: “Start the Docker service” (service docker start). On systemd, enable so it survives reboot:
@@ -43,31 +66,27 @@ systemctl enable --now docker
 usermod -a -G docker "${BOOT_USER}" || true
 
 # Docker Compose V2: not in the ECS “install Docker” steps above.
-# Prefer Amazon Linux package when present; else plugin install per Docker Compose docs:
-# https://docs.docker.com/compose/install/linux/#install-the-plugin-manually
 mkdir -p /usr/libexec/docker/cli-plugins
 if ! docker compose version >/dev/null 2>&1; then
-  dnf install -y docker-compose-plugin || true
+  retry 3 10 dnf install -y docker-compose-plugin || true
 fi
 if ! docker compose version >/dev/null 2>&1; then
   ARCH="$(uname -m)"
-  curl -fSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${ARCH}" \
+  retry 5 15 curl -fSL \
+    "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${ARCH}" \
     -o /usr/libexec/docker/cli-plugins/docker-compose
   chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 fi
 
-# Buildx: `docker compose build` requires buildx >= 0.17 with recent Docker; AL2023 `docker` RPM
-# often bundles an older buildx → compose fails with "compose build requires buildx 0.17.0 or later".
-# Try distro package; if missing or too old, install a fixed release (same cli-plugins layout).
-DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
+# Buildx: `docker compose build` requires buildx >= 0.17 with recent Docker
 buildx_meets_minimum() {
   local cur
   cur="$(docker buildx version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-  [ -n "$cur" ] || return 1
-  [ "$(printf '%s\n' 'v0.17.0' "$cur" | sort -V | head -n1)" = "v0.17.0" ]
+  [[ -n "$cur" ]] || return 1
+  [[ "$(printf '%s\n' 'v0.17.0' "$cur" | sort -V | head -n1)" == "v0.17.0" ]]
 }
 if ! buildx_meets_minimum; then
-  dnf install -y docker-buildx-plugin || true
+  retry 3 10 dnf install -y docker-buildx-plugin || true
 fi
 if ! buildx_meets_minimum; then
   case "$(uname -m)" in
@@ -75,23 +94,43 @@ if ! buildx_meets_minimum; then
     aarch64) BX_ARCH=arm64 ;;
     *) BX_ARCH=$(uname -m) ;;
   esac
-  curl -fSL "https://github.com/docker/buildx/releases/download/${DOCKER_BUILDX_VERSION}/buildx-${DOCKER_BUILDX_VERSION}.linux-${BX_ARCH}" \
+  retry 5 15 curl -fSL \
+    "https://github.com/docker/buildx/releases/download/${DOCKER_BUILDX_VERSION}/buildx-${DOCKER_BUILDX_VERSION}.linux-${BX_ARCH}" \
     -o /usr/libexec/docker/cli-plugins/docker-buildx
   chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
 fi
 
+# Verify toolchain before deploy (fail fast with clear log).
+docker version
+docker compose version
+docker buildx version
+
 install -d -o "${BOOT_USER}" -g "${BOOT_USER}" "${TARGET_DIR}"
-if [ ! -d "${TARGET_DIR}/.git" ]; then
-  runuser -u "${BOOT_USER}" -- git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" "${TARGET_DIR}"
+if [[ ! -d "${TARGET_DIR}/.git" ]]; then
+  retry 5 20 runuser -u "${BOOT_USER}" -- git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" "${TARGET_DIR}"
 fi
 
-if [ ! -f "${TARGET_DIR}/.env" ]; then
+if [[ ! -f "${TARGET_DIR}/.env" ]]; then
   runuser -u "${BOOT_USER}" -- cp "${TARGET_DIR}/.env.aws.example" "${TARGET_DIR}/.env"
 fi
 
 cd "${TARGET_DIR}"
 chmod +x scripts/deploy_aws_docker.sh
-SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh
+
+deploy_hook_fail() {
+  echo "ERROR: deploy_aws_docker.sh failed; extra diagnostics:" >&2
+  docker compose --env-file .env -f docker-compose.aws.yml ps || true
+  local s
+  for s in web mysql alertmanager prometheus; do
+    echo "--- logs ${s} ---" >&2
+    docker compose --env-file .env -f docker-compose.aws.yml logs --tail 120 "${s}" 2>/dev/null || true
+  done
+}
+
+if ! SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh; then
+  deploy_hook_fail
+  exit 1
+fi
 
 echo "Bootstrap done. Log: /var/log/taller-ec2-bootstrap.log"
 echo "Note for SSH: user ${BOOT_USER} was added to group docker. Open a NEW SSH session (or run: newgrp docker) before using docker without sudo."

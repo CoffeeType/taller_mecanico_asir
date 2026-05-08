@@ -1,12 +1,51 @@
 #!/bin/sh
 set -eu
 
-# Ensure template exists
-TEMPLATE_PATH="/etc/alertmanager/config/alertmanager.yml"
 OUT_PATH="/alertmanager/alertmanager.yml"
 
-if [ ! -f "$TEMPLATE_PATH" ]; then
-  echo "ERROR: Template not found at $TEMPLATE_PATH" >&2
+# Resolve template (compose.aws may mount at config path or legacy .tpl path)
+TEMPLATE_PATH=""
+for cand in /etc/alertmanager/config/alertmanager.yml /etc/alertmanager/alertmanager.yml.tpl; do
+  if [ -f "$cand" ]; then
+    TEMPLATE_PATH="$cand"
+    break
+  fi
+done
+
+# Minimal valid config when email is not configured (Alertmanager rejects empty email `to`, missing SMTP, etc.)
+write_noop_config() {
+  cat > "$OUT_PATH" <<'EOF'
+route:
+  receiver: 'noop'
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+receivers:
+  - name: 'noop'
+EOF
+}
+
+# Email path only when recipient + minimum SMTP globals are set (avoids config validation errors on first boot)
+email_ready() {
+  [ -n "${ALERT_EMAIL_TO:-}" ] && [ -n "${SMTP_SMARTHOST:-}" ] && [ -n "${SMTP_FROM:-}" ]
+}
+
+if ! email_ready; then
+  if [ -z "${ALERT_EMAIL_TO:-}" ]; then
+    echo "INFO: ALERT_EMAIL_TO unset; using noop Alertmanager config (no email)." >&2
+  else
+    echo "WARNING: Email alerts requested but SMTP_SMARTHOST/SMTP_FROM incomplete; using noop config until configured." >&2
+  fi
+  write_noop_config
+  echo "Configuration written at $OUT_PATH"
+  exec /bin/alertmanager \
+    --config.file="$OUT_PATH" \
+    --storage.path=/alertmanager \
+    --web.listen-address=:9093
+fi
+
+if [ -z "$TEMPLATE_PATH" ] || [ ! -f "$TEMPLATE_PATH" ]; then
+  echo "ERROR: Template not found (expected /etc/alertmanager/config/alertmanager.yml or alertmanager.yml.tpl)" >&2
   exit 1
 fi
 
@@ -23,13 +62,11 @@ smtp_auth_password=$(escape_sed_repl "${SMTP_AUTH_PASSWORD:-}")
 smtp_require_tls="${SMTP_REQUIRE_TLS:-true}"
 alert_email_to=$(escape_sed_repl "${ALERT_EMAIL_TO:-}")
 
-# Alertmanager fails if these are empty and used in config
 if [ -z "$smtp_from" ] || [ -z "$smtp_auth_username" ] || [ -z "$smtp_auth_password" ]; then
-  echo "WARNING: SMTP credentials missing. Email alerts will likely fail." >&2
+  echo "WARNING: SMTP auth credentials partly missing; email delivery may fail until .env is complete." >&2
 fi
 
-# Replace placeholders in template
-# We use ! as sed delimiter to avoid issues with / in paths or passwords
+# Replace placeholders in template (use ! as sed delimiter)
 sed \
   -e "s|__SMTP_SMARTHOST__|$smtp_smarthost|g" \
   -e "s|__SMTP_FROM__|$smtp_from|g" \
@@ -41,7 +78,6 @@ sed \
 
 echo "Configuration generated at $OUT_PATH"
 
-# Start Alertmanager
 exec /bin/alertmanager \
   --config.file="$OUT_PATH" \
   --storage.path=/alertmanager \

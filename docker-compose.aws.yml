@@ -50,7 +50,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -80,7 +80,8 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.32.1
     volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      # Must match path expected by alertmanager-entrypoint.sh (`/etc/alertmanager/config/alertmanager.yml`)
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/config/alertmanager.yml:ro
       - ./monitoring/alertmanager/alertmanager-entrypoint.sh:/entrypoint.sh:ro
       - alertmanager_data:/alertmanager
     environment:

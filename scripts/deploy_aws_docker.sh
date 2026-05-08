@@ -2,6 +2,9 @@
 # Despliegue / actualizacion idempotente en EC2 usando docker-compose.aws.yml
 # Uso (en el servidor): ./scripts/deploy_aws_docker.sh
 # Variables: COMPOSE_FILE (default docker-compose.aws.yml), SKIP_BACKUP=1, PROJECT_DIR
+#
+# No hacer `source .env`: contraseñas con $, #, espacios rompen el shell.
+# Compose lee variables con --env-file .env
 
 set -euo pipefail
 
@@ -12,14 +15,52 @@ cd "$PROJECT_DIR"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.aws.yml}"
 export COMPOSE_FILE
 
+COMPOSE_ENV_ARGS=()
 if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+  COMPOSE_ENV_ARGS=(--env-file .env)
 fi
 
-WEB_HOST_PORT="${WEB_HOST_PORT:-80}"
+# Lee una clave de .env sin evaluar como shell (solo KEY=valor por línea).
+read_env_var() {
+  local key="$1"
+  local default="${2:-}"
+  local file="$PROJECT_DIR/.env"
+  local line val
+  [[ -f "$file" ]] || { printf '%s' "$default"; return 0; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//$'\r'/}"
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    if [[ "$line" == "$key="* ]]; then
+      val="${line#*=}"
+      if [[ "$val" =~ ^\"(.*)\"$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      if [[ "$val" =~ ^\'(.*)\'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      printf '%s' "$val"
+      return 0
+    fi
+  done < "$file"
+  printf '%s' "$default"
+}
+
+compose() {
+  docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" "$@"
+}
+
+dump_diagnostics() {
+  echo "Diagnostics: compose ps" >&2
+  compose ps || true
+  local svc
+  for svc in web mysql alertmanager prometheus; do
+    echo "--- compose logs --tail 120 ${svc} ---" >&2
+    compose logs --tail 120 "$svc" 2>/dev/null || true
+  done
+}
+
+trap 'echo "Deploy failed; diagnostics below." >&2; dump_diagnostics' ERR
+
+WEB_HOST_PORT="$(read_env_var WEB_HOST_PORT 80)"
+PROMETHEUS_HOST_PORT="$(read_env_var PROMETHEUS_HOST_PORT 9090)"
+
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 mkdir -p "$BACKUP_DIR"
 
@@ -27,36 +68,34 @@ run_backup() {
   local ts
   ts="$(date +%Y%m%d_%H%M%S)"
   echo "Backup MySQL -> ${BACKUP_DIR}/mysql_${ts}.sql.gz"
-  docker compose -f "$COMPOSE_FILE" exec -T mysql sh -c \
+  compose exec -T mysql sh -c \
     'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers "$MYSQL_DATABASE"' \
     | gzip > "${BACKUP_DIR}/mysql_${ts}.sql.gz"
   echo "Backup OK ($(du -h "${BACKUP_DIR}/mysql_${ts}.sql.gz" | cut -f1))"
 }
 
 if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
-  if docker compose -f "$COMPOSE_FILE" ps -q mysql 2>/dev/null | grep -q .; then
+  if compose ps -q mysql 2>/dev/null | grep -q .; then
     run_backup || echo "WARN: backup fallo; continua si es primer deploy" >&2
   fi
 fi
 
 echo "Build / pull imagenes..."
-docker compose -f "$COMPOSE_FILE" build --parallel
-docker compose -f "$COMPOSE_FILE" pull --ignore-pull-failures || true
+compose build --parallel
+compose pull --ignore-pull-failures || true
 
 echo "Levantando stack..."
-# --wait: esperar healthchecks (web depende de mysql + entrypoint largo en primer arranque).
-# --wait-timeout existe desde Compose ~2.23; sin el flag, --wait puede esperar indefinidamente en casos raros.
 UP_HELP="$(docker compose up --help 2>/dev/null || true)"
 if echo "$UP_HELP" | grep -q -- '--wait-timeout'; then
-  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout "${COMPOSE_UP_WAIT_TIMEOUT:-600}"
+  compose up -d --remove-orphans --wait --wait-timeout "${COMPOSE_UP_WAIT_TIMEOUT:-600}"
 elif echo "$UP_HELP" | grep -qE '[[:space:]]--wait[[:space:]]'; then
-  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --wait
+  compose up -d --remove-orphans --wait
 else
-  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+  compose up -d --remove-orphans
 fi
 
 echo "Estado:"
-docker compose -f "$COMPOSE_FILE" ps
+compose ps
 
 echo "Smoke HTTP (web)..."
 WEB_URL="http://127.0.0.1:${WEB_HOST_PORT}/"
@@ -76,11 +115,11 @@ while [[ "$elapsed" -lt "$MAX_WAIT_SEC" ]]; do
 done
 if [[ "$ok" != "1" ]]; then
   echo "ERROR: no responde ${WEB_URL} tras ${MAX_WAIT_SEC}s" >&2
-  docker compose -f "$COMPOSE_FILE" logs --tail 120 web || true
+  compose logs --tail 120 web || true
   exit 1
 fi
 
-if curl -sf "http://127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}/-/healthy" >/dev/null 2>&1; then
+if curl -sf "http://127.0.0.1:${PROMETHEUS_HOST_PORT}/-/healthy" >/dev/null 2>&1; then
   echo "OK: Prometheus healthy (localhost)"
 else
   echo "WARN: Prometheus no accesible en loopback (revisa arranque)" >&2
