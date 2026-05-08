@@ -16,7 +16,7 @@ flowchart LR
   subgraph aws [AWS]
     DNS[Route53_o_Cloudflare]
     SG[SecurityGroup]
-    EC2[EC2_Ubuntu]
+      EC2[EC2_AL2023_o_Ubuntu]
     subgraph docker [Docker_Compose]
       Web[web_Apache_PHP]
       MySQL[(mysql)]
@@ -52,7 +52,7 @@ flowchart LR
 | [`.env.aws.example`](../.env.aws.example) | Plantilla de variables para el servidor; copiar a `.env` y rotar secretos. |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
 | [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh) | Backup opcional, `compose build/up`, comprobaciones HTTP. |
-| [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) | *User data* EC2: Docker (si falta), clon en `/opt/taller_mecanico_asir`, `.env` desde plantilla y primer `deploy_aws_docker.sh`. |
+| [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) | *User data* EC2 (**Amazon Linux 2023**): sigue la instalación de Docker de la [guía de Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker), añade Compose si hace falta, clona en `/opt/taller_mecanico_asir` y ejecuta `deploy_aws_docker.sh`. |
 
 ## Costes orientativos
 
@@ -88,22 +88,44 @@ Reglas **mínimas** (ajusta IPs):
 
 **No** abras al mundo: **3306 (MySQL)**, **9090 (Prometheus)**, **3000 (Grafana)**, **9093 (Alertmanager)**, exporters. En [`docker-compose.aws.yml`](../docker-compose.aws.yml) la monitorización queda en **loopback** (`127.0.0.1`); acceso vía **túnel SSH** o proxy interno.
 
-## Despliegue manual en EC2 (Ubuntu 22.04 LTS)
+## Despliegue manual en EC2
 
-### 1) Lanzar la instancia
+### Opción A — Amazon Linux 2023 (recomendada para [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh))
 
-- AMI: **Ubuntu Server 22.04 LTS** (o la AMI generada con Packer).
+1. **AMI:** última **Amazon Linux 2023** (p. ej. kernel 6.1 en la familia `al2023-ami-*`).
+2. **Tipo / disco / SG / IAM:** igual que en la opción Ubuntu más abajo.
+3. **User data:** pega el contenido de [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) en *Advanced details* → *User data* ([documentación EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)). Debe empezar por `#!/bin/bash`; usa texto plano salvo que codifiques tú en Base64 el script completo.
+
+El script replica los pasos oficiales de AWS para instalar Docker en AL2023 ([*Installing Docker on AL2023*](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker)): `dnf update -y`, `dnf install docker`, arranque del servicio y `ec2-user` en el grupo `docker`. Los paquetes `docker`/`containerd` están en los repositorios principales de AL2023 ([notas AL2023 / ECS](https://docs.aws.amazon.com/linux/al2023/ug/ecs.html)). **Docker Compose V2** no forma parte de ese snippet de ECS; el bootstrap intenta `docker-compose-plugin` por `dnf` y, si no basta, instala el plugin según [Compose — instalación manual del plugin](https://docs.docker.com/compose/install/linux/#install-the-plugin-manually).
+
+Log del arranque: `/var/log/taller-ec2-bootstrap.log`. **Tras el primer arranque**, rota secretos en `.env`.
+
+**Si instalas a mano** (sin user data), equivalente al documento AWS:
+
+```bash
+sudo dnf update -y
+sudo dnf install -y docker
+sudo systemctl enable --now docker
+sudo usermod -a -G docker ec2-user
+# nueva sesión SSH para aplicar el grupo salvo que uses root para compose
+```
+
+### Opción B — Ubuntu 22.04 LTS
+
+#### 1) Lanzar la instancia
+
+- AMI: **Ubuntu Server 22.04 LTS** (o la AMI generada con Packer para Ubuntu).
 - Tipo: al menos **t3.small** si incluyes monitorización completa (Prometheus/Grafana); **t3.medium** con más holgura.
 - Disco raíz: **gp3**, tamaño acorde (p. ej. 30–50 GiB iniciales).
 - **EBS cifrado** activado.
 - Asociar **rol IAM** si usarás SSM, backups S3, etc.
 
-**User data (primer arranque):** en el asistente de lanzamiento, pega el contenido de [`scripts/ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) en el campo *User data* (debe empezar por `#!/bin/bash`). Usa **texto plano**; no actives la opción de que el contenido **ya venga en Base64** salvo que hayas codificado tú el archivo entero (si no, la consola muestra error de Base64 inválido). Eso automatiza los pasos 2–5 de esta guía: instala Docker solo si la AMI no lo trae, clona el repo en `/opt/taller_mecanico_asir`, crea `.env` desde [`.env.aws.example`](../.env.aws.example) si no existe y ejecuta `deploy_aws_docker.sh` con `SKIP_BACKUP=1`. El remoto por defecto en el script apunta a este repositorio público; cámbialo si usas un fork o un clon privado (repos privados requieren credenciales o clave de despliegue aparte). Log en la instancia: `/var/log/taller-ec2-bootstrap.log`. **Tras el arranque**, entra a rotar contraseñas y tokens en `.env` (el script no sustituye secretos).
+En Ubuntu puedes automatizar con tu propio user data o seguir los pasos manuales siguientes (no uses el bootstrap de AL2023 tal cual: está pensado para `dnf`/Amazon Linux).
 
-### 2) Instalar Docker (si la AMI no lo trae)
+#### 2) Instalar Docker (si la AMI no lo trae)
 
 ```bash
-# Seguir documentación oficial Docker para Ubuntu, o usar AMI construida con Packer
+# Documentación Docker para Ubuntu, o AMI construida con Packer
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
@@ -115,7 +137,7 @@ sudo usermod -aG docker "$USER"
 # cerrar sesión y volver a entrar para grupo docker
 ```
 
-### 3) Clonar el repositorio
+#### 3) Clonar el repositorio
 
 ```bash
 sudo mkdir -p /opt/taller_mecanico_asir
@@ -124,7 +146,7 @@ cd /opt/taller_mecanico_asir
 git clone <URL_DE_TU_REPO> .
 ```
 
-### 4) Variables de entorno
+#### 4) Variables de entorno
 
 ```bash
 cp .env.aws.example .env
@@ -138,7 +160,7 @@ Comprueba al menos:
 - `APP_ENV=production`, `APP_DEBUG=false`
 - SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`)
 
-### 5) Levantar el stack
+#### 5) Levantar el stack
 
 ```bash
 docker compose -f docker-compose.aws.yml --env-file .env up -d --build
@@ -147,7 +169,9 @@ docker compose -f docker-compose.aws.yml ps
 
 La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Prometheus y Grafana escuchan solo en **localhost** del servidor.
 
-### 6) Verificación rápida
+### Verificación y Grafana (tras Opción A con user data o tras Opción B §5)
+
+#### Comprobaciones HTTP en la instancia
 
 ```bash
 curl -sf http://127.0.0.1/ | head
@@ -156,10 +180,12 @@ curl -sf http://127.0.0.1:9090/-/healthy
 
 (Desde fuera: `http://IP_PUBLICA/` si el SG permite 80.)
 
-### 7) Acceso a Grafana por túnel SSH
+#### Acceso a Grafana por túnel SSH
+
+Usuario SSH según AMI: **`ec2-user`** (Amazon Linux) o **`ubuntu`** (Ubuntu).
 
 ```bash
-ssh -L 3000:127.0.0.1:3000 ubuntu@IP_PUBLICA
+ssh -L 3000:127.0.0.1:3000 ec2-user@IP_PUBLICA
 # Navegador local: http://127.0.0.1:3000
 ```
 
