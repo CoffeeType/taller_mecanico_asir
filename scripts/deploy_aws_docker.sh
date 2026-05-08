@@ -2,6 +2,7 @@
 # Despliegue / actualizacion idempotente en EC2 usando docker-compose.aws.yml
 # Uso (en el servidor): ./scripts/deploy_aws_docker.sh
 # Variables: COMPOSE_FILE (default docker-compose.aws.yml), SKIP_BACKUP=1, PROJECT_DIR
+# cAdvisor: CADVISOR_IMAGE_TAG (semver sin v, ej. 0.56.2; upstream README google/cadvisor Quick Start).
 #
 # No hacer `source .env`: contraseñas con $, #, espacios rompen el shell.
 # Compose lee variables con --env-file .env
@@ -224,6 +225,19 @@ fi
 
 echo "Compose config (validacion)..."
 compose config >/dev/null
+
+CADVISOR_IMAGE_TAG="$(read_env_var CADVISOR_IMAGE_TAG "0.56.2")"
+if [[ "$WANT_MONITORING" == "1" ]]; then
+  if [[ "$CADVISOR_IMAGE_TAG" == v* ]]; then
+    echo "WARN: CADVISOR_IMAGE_TAG=${CADVISOR_IMAGE_TAG} lleva prefijo 'v'; en ghcr.io/google/cadvisor los tags son semver sin v (ej. 0.56.2). Ver https://github.com/google/cadvisor#quick-start-running-cadvisor-in-a-docker-container" >&2
+  fi
+  CADVISOR_IMAGE_REF="ghcr.io/google/cadvisor:${CADVISOR_IMAGE_TAG}"
+  echo "Preflight: docker pull cAdvisor (${CADVISOR_IMAGE_REF})..."
+  if ! docker pull "$CADVISOR_IMAGE_REF"; then
+    echo "ERROR: docker pull fallo para ${CADVISOR_IMAGE_REF}. Ajusta CADVISOR_IMAGE_TAG en .env al ultimo release (https://github.com/google/cadvisor/releases); el tag de imagen NO incluye el prefijo v." >&2
+    exit 1
+  fi
+fi
 
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 mkdir -p "$BACKUP_DIR"

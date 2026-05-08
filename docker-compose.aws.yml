@@ -206,7 +206,9 @@ services:
       - app-network
 
   cadvisor:
-    image: ghcr.io/google/cadvisor:0.56.2
+    # Upstream Quick Start: ghcr.io/google/cadvisor:$VERSION (semver sin prefijo v). < v0.53: gcr.io/cadvisor/cadvisor
+    # https://github.com/google/cadvisor#quick-start-running-cadvisor-in-a-docker-container
+    image: ghcr.io/google/cadvisor:${CADVISOR_IMAGE_TAG:-0.56.2}
     profiles:
       - monitoring
     cpus: "${CADVISOR_CPUS:-0.15}"
