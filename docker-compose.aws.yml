@@ -1,9 +1,12 @@
 # Stack orientado a EC2 + Docker Compose en AWS.
 # - Sin bind-mount del codigo completo (imagen build ./).
 # - MySQL y exporters NO expuestos al host; solo red Docker interna.
-# - Prometheus / Grafana / Alertmanager solo en loopback y bajo profile "monitoring".
+# - Monitorizacion (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf)
+#   bajo profile "monitoring" y puertos en loopback (tunel SSH).
+# - Simulador de trafico bajo profile "traffic"; UI en loopback por defecto.
 #
-# Uso: docker compose -f docker-compose.aws.yml --env-file .env up -d
+# Uso: docker compose -f docker-compose.aws.yml --env-file .env --profile monitoring --profile traffic up -d
+# O export COMPOSE_PROFILES=monitoring,traffic
 # Ver docs/AWS_DOCKER_DEPLOYMENT.md
 
 services:
@@ -88,6 +91,12 @@ services:
       - app-network
     ports:
       - "127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   alertmanager:
     image: prom/alertmanager:v0.32.1
@@ -117,6 +126,12 @@ services:
       - app-network
     ports:
       - "127.0.0.1:${ALERTMANAGER_HOST_PORT:-9093}:9093"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   grafana:
     image: grafana/grafana:13.0.1
@@ -140,6 +155,12 @@ services:
       - app-network
     ports:
       - "127.0.0.1:${GRAFANA_HOST_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   node-exporter:
     image: prom/node-exporter:v1.11.1
@@ -151,6 +172,16 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
 
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.19.0
@@ -191,6 +222,134 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9115/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.56.2
+    profiles:
+      - monitoring
+    cpus: "${CADVISOR_CPUS:-0.15}"
+    mem_limit: "${CADVISOR_MEM_LIMIT:-256m}"
+    memswap_limit: "${CADVISOR_MEMSWAP_LIMIT:-384m}"
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=30s"
+    restart: unless-stopped
+    networks:
+      - app-network
+    ports:
+      - "127.0.0.1:${CADVISOR_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  telegraf:
+    image: telegraf:latest
+    profiles:
+      - monitoring
+    cpus: "${TELEGRAF_CPUS:-0.15}"
+    mem_limit: "${TELEGRAF_MEM_LIMIT:-256m}"
+    memswap_limit: "${TELEGRAF_MEMSWAP_LIMIT:-384m}"
+    user: "0:0"
+    privileged: true
+    entrypoint: ["telegraf"]
+    command: ["--config", "/etc/telegraf/telegraf.conf"]
+    environment:
+      - DOCKER_API_VERSION=1.41
+    volumes:
+      - ./monitoring/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+    ports:
+      - "127.0.0.1:${TELEGRAF_HOST_PORT:-9273}:9273"
+
+  traffic-simulator:
+    build:
+      context: .
+      dockerfile: docker/traffic-simulator/Dockerfile
+    profiles:
+      - traffic
+    cpus: "${TRAFFIC_SIMULATOR_CPUS:-0.15}"
+    mem_limit: "${TRAFFIC_SIMULATOR_MEM_LIMIT:-256m}"
+    memswap_limit: "${TRAFFIC_SIMULATOR_MEMSWAP_LIMIT:-384m}"
+    environment:
+      - SIM_BASE_URL=${SIM_BASE_URL:-http://web}
+      - SIM_LOG_DIR=/var/www/html/logs
+      - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}
+      - SIMULATOR_CONTROL_PORT=8085
+      - SIM_ROUTES_FILE=${SIM_ROUTES_FILE:-}
+      - SIM_EXTERNAL_TARGETS_ENABLED=${SIM_EXTERNAL_TARGETS_ENABLED:-true}
+      - SIM_REQUIRE_EXTERNAL_CONFIRMATION=${SIM_REQUIRE_EXTERNAL_CONFIRMATION:-true}
+      - SIM_INTERNAL_HOSTS=${SIM_INTERNAL_HOSTS:-web,localhost,127.0.0.1,::1,mysql,host.docker.internal}
+      - SIM_ALLOW_PRIVATE_TARGETS=${SIM_ALLOW_PRIVATE_TARGETS:-false}
+      - SIM_SSL_VERIFY=${SIM_SSL_VERIFY:-true}
+    volumes:
+      - app_logs:/var/www/html/logs
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  traffic-simulator-ui:
+    build:
+      context: .
+      dockerfile: docker/traffic-simulator-ui/Dockerfile
+    profiles:
+      - traffic
+    cpus: "${TRAFFIC_SIMULATOR_UI_CPUS:-0.10}"
+    mem_limit: "${TRAFFIC_SIMULATOR_UI_MEM_LIMIT:-128m}"
+    memswap_limit: "${TRAFFIC_SIMULATOR_UI_MEMSWAP_LIMIT:-192m}"
+    ports:
+      - "127.0.0.1:${TRAFFIC_SIMULATOR_UI_HOST_PORT:-8890}:80"
+    environment:
+      - SIMULATOR_CONTAINER_URL=http://traffic-simulator:8085
+      - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}
+      - SIM_LOG_DIR=/var/www/html/logs
+      - SIM_UI_DEFAULT_BASE_URL=${SIM_UI_DEFAULT_BASE_URL:-http://web}
+      - PROMETHEUS_EXTERNAL_URL=${PROMETHEUS_EXTERNAL_URL:-http://127.0.0.1:9090}
+      - GRAFANA_EXTERNAL_URL=${GRAFANA_EXTERNAL_URL:-http://127.0.0.1:3000}
+      - TZ=${TZ:-UTC}
+      - SIM_EXTERNAL_TARGETS_ENABLED=${SIM_EXTERNAL_TARGETS_ENABLED:-true}
+      - SIM_REQUIRE_EXTERNAL_CONFIRMATION=${SIM_REQUIRE_EXTERNAL_CONFIRMATION:-true}
+      - SIM_INTERNAL_HOSTS=${SIM_INTERNAL_HOSTS:-web,localhost,127.0.0.1,::1,mysql,host.docker.internal}
+      - SIM_ALLOW_PRIVATE_TARGETS=${SIM_ALLOW_PRIVATE_TARGETS:-false}
+      - SIM_SSL_VERIFY=${SIM_SSL_VERIFY:-true}
+    volumes:
+      - app_logs:/var/www/html/logs
+    networks:
+      - app-network
+    depends_on:
+      traffic-simulator:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
   mysql_data:

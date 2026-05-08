@@ -70,38 +70,25 @@ EOF
   free -h || true
 }
 
+# --- Config (edit if needed) ---
+REPO_URL="https://github.com/CoffeeType/taller_mecanico_asir.git"
+GIT_REF="main"
+
+BOOT_USER="ec2-user"
+TARGET_DIR="/opt/taller_mecanico_asir"
+
 install_resource_guard() {
-  cat >/usr/local/sbin/taller-docker-safe-mode <<'EOF'
-#!/bin/bash
-set -euo pipefail
+  install -m 0755 "${TARGET_DIR}/scripts/taller-docker-safe-mode.sh" /usr/local/sbin/taller-docker-safe-mode
 
-MIN_MB="${MIN_MONITORING_MEM_MB:-1900}"
-FORCE="${FORCE_MONITORING_ON_LOW_MEM:-0}"
-MEM_MB="$(awk '/MemTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null || printf '0')"
-
-if [[ "$FORCE" == "1" || "$MEM_MB" -eq 0 || "$MEM_MB" -ge "$MIN_MB" ]]; then
-  exit 0
-fi
-
-echo "Low memory (${MEM_MB}MB < ${MIN_MB}MB). Disabling monitoring containers to keep EC2 reachable."
-mapfile -t containers < <(docker ps -a --format '{{.Names}}' | grep -E '^taller_mecanico_asir-(prometheus|grafana|alertmanager|node-exporter|mysqld-exporter|blackbox-exporter)-1$' || true)
-if [[ "${#containers[@]}" -eq 0 ]]; then
-  exit 0
-fi
-
-docker update --restart=no "${containers[@]}" >/dev/null || true
-docker stop --time 15 "${containers[@]}" >/dev/null || true
-EOF
-  chmod +x /usr/local/sbin/taller-docker-safe-mode
-
-  cat >/etc/systemd/system/taller-docker-safe-mode.service <<'EOF'
+  cat >/etc/systemd/system/taller-docker-safe-mode.service <<EOF
 [Unit]
-Description=Disable non-core Docker monitoring containers on low-memory EC2
+Description=Optional: stop heavy Docker services on low-memory EC2 (only if ALLOW_DEGRADED_STACK=1 in .env)
 After=docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
+Environment=TALLER_ENV_FILE=${TARGET_DIR}/.env
 ExecStart=/usr/local/sbin/taller-docker-safe-mode
 
 [Install]
@@ -110,13 +97,6 @@ EOF
   systemctl daemon-reload
   systemctl enable taller-docker-safe-mode.service
 }
-
-# --- Config (edit if needed) ---
-REPO_URL="https://github.com/CoffeeType/taller_mecanico_asir.git"
-GIT_REF="main"
-
-BOOT_USER="ec2-user"
-TARGET_DIR="/opt/taller_mecanico_asir"
 
 # Pin fallback CLI plugins (override if Compose demands newer Buildx).
 DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-v5.1.3}"
@@ -128,9 +108,11 @@ ensure_swap
 # AWS ECS / AL2023: “Update the installed packages and package cache” (yum update -y).
 retry 5 20 dnf update -y
 
-# Extra tooling for this project (not in ECS Docker snippet): Instance Connect + git.
+# Extra tooling for this project (not in ECS Docker snippet): Instance Connect + git + httpd fallback.
 # Do not install package `curl`: AL2023 ships curl-minimal (/usr/bin/curl); package `curl` conflicts with it.
-retry 5 10 dnf install -y ec2-instance-connect git
+retry 5 10 dnf install -y ec2-instance-connect git httpd
+# Docker publishes the app on port 80; keep host httpd installed but inactive unless used manually.
+systemctl disable --now httpd || true
 
 # AWS ECS / AL2023: “Install the most recent Docker Community Edition package” (yum install docker).
 if ! command -v docker >/dev/null 2>&1; then
@@ -139,7 +121,6 @@ fi
 
 # AWS ECS: “Start the Docker service” (service docker start). On systemd, enable so it survives reboot:
 systemctl enable --now docker
-install_resource_guard
 
 # AWS ECS: add ec2-user to docker group (logout/login applies group; deploy runs as root here).
 usermod -a -G docker "${BOOT_USER}" || true
@@ -193,21 +174,24 @@ if [[ ! -f "${TARGET_DIR}/.env" ]]; then
   runuser -u "${BOOT_USER}" -- cp "${TARGET_DIR}/.env.aws.example" "${TARGET_DIR}/.env"
 fi
 
+install_resource_guard
+
 cd "${TARGET_DIR}"
-chmod +x scripts/deploy_aws_docker.sh
+chmod +x scripts/deploy_aws_docker.sh scripts/taller-docker-safe-mode.sh
 
 deploy_hook_fail() {
   echo "ERROR: deploy_aws_docker.sh failed; extra diagnostics:" >&2
-  docker compose --env-file .env -f docker-compose.aws.yml ps || true
+  docker compose --env-file .env -f docker-compose.aws.yml ps -a || true
   local s
-  for s in web mysql alertmanager prometheus grafana; do
+  while read -r s; do
+    [[ -z "${s}" ]] && continue
     echo "--- logs ${s} ---" >&2
-    docker compose --env-file .env -f docker-compose.aws.yml logs --tail 120 "${s}" 2>/dev/null || true
-  done
+    docker compose --env-file .env -f docker-compose.aws.yml logs --tail 160 "${s}" 2>/dev/null || true
+  done < <(docker compose --env-file .env -f docker-compose.aws.yml config --services 2>/dev/null || true)
 }
 
-# Core profile by default: web + mysql only. Set COMPOSE_PROFILES=monitoring in .env to start observability stack.
-if ! SKIP_BACKUP=1 COMPOSE_PROFILES="${COMPOSE_PROFILES:-}" ./scripts/deploy_aws_docker.sh; then
+# Perfiles y secretos vienen de .env (por defecto full stack en .env.aws.example). Rotar claves antes de produccion.
+if ! SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh; then
   deploy_hook_fail
   exit 1
 fi

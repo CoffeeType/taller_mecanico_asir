@@ -1,4 +1,4 @@
-# Prometheus para docker-compose.aws.yml (sin telegraf ni cadvisor).
+# Prometheus para docker-compose.aws.yml (paridad con stack local: telegraf + cadvisor).
 # El compose local usa monitoring/prometheus/prometheus.yml completo.
 
 global:
@@ -26,6 +26,15 @@ scrape_configs:
   - job_name: 'mysqld-exporter'
     static_configs:
       - targets: ['mysqld-exporter:9104']
+
+  - job_name: 'telegraf'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['telegraf:9273']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
 
   # PHP Application Metrics
   - job_name: 'php-app'
