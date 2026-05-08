@@ -211,10 +211,9 @@ fi
 # AWS ECS: “Start the Docker service” (service docker start). On systemd, enable so it survives reboot:
 systemctl enable --now docker
 
-# AWS ECS: add ec2-user to docker group. Equivalent manual command:
-#   sudo usermod -aG docker ec2-user
+# AWS ECS: add ec2-user to docker group.
 # Then close the SSH session with `exit` and reconnect so group membership applies.
-usermod -aG docker "${BOOT_USER}" || true
+sudo usermod -aG docker ec2-user || true
 
 # Docker Compose V2: not in the ECS “install Docker” steps above.
 mkdir -p /usr/libexec/docker/cli-plugins

@@ -12,6 +12,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
+# EC2: ec2-user en grupo docker (Docker sin sudo tras nueva sesión SSH o `newgrp docker`).
+if id ec2-user >/dev/null 2>&1; then
+  sudo usermod -aG docker ec2-user || true
+fi
+
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.aws.yml}"
 export COMPOSE_FILE
 
