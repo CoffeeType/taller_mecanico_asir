@@ -33,7 +33,7 @@ Este documento describe cómo configurar y utilizar el sistema de monitoreo comp
 | Alertmanager | `prom/alertmanager:v0.32.1` |
 | Grafana | `grafana/grafana:13.0.1` |
 | Node Exporter | `prom/node-exporter:v1.11.1` |
-| cAdvisor | `ghcr.io/google/cadvisor:v0.56.2` |
+| cAdvisor | `ghcr.io/google/cadvisor:0.56.2` |
 | MySQL Exporter | `prom/mysqld-exporter:v0.19.0` |
 | Blackbox Exporter | `prom/blackbox-exporter:v0.26.0` |
 
