@@ -149,6 +149,8 @@ Variables recomendadas:
 - `SMTP_AUTH_PASSWORD`: contraseña o "app password" del proveedor
 - `SMTP_REQUIRE_TLS`: `true`/`false` (normalmente `true` en 587)
 
+En AWS, Amazon SES funciona como SMTP estándar. Consulta la guía específica de SES en [`docs/AWS_DOCKER_DEPLOYMENT.md`](AWS_DOCKER_DEPLOYMENT.md#4b-alertmanager-con-amazon-ses-smtp) para verificar identidad, crear credenciales SMTP y configurar `SES_SMTP_REGION` o `SMTP_SMARTHOST`.
+
 Después de modificar `.env`:
 
 ```bash
@@ -210,6 +212,7 @@ docker-compose up -d alertmanager prometheus
 3. **Para otros proveedores**:
    - **Outlook**: `smtp-mail.outlook.com:587`
    - **Yahoo**: `smtp.mail.yahoo.com:587`
+   - **Amazon SES**: `email-smtp.<region>.amazonaws.com:587` con credenciales SMTP de SES e identidad `SMTP_FROM` verificada
    - **Servidor propio**: Configurar según tu proveedor
 
 ### Slack Integration (Opcional)

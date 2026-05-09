@@ -58,6 +58,9 @@ set_env_value() {
   else
     printf '\n%s=%s\n' "$key" "$value" >> "$file"
   fi
+  if [[ "${#COMPOSE_ENV_ARGS[@]}" -eq 0 && -f "$file" ]]; then
+    COMPOSE_ENV_ARGS=(--env-file .env)
+  fi
 }
 
 metadata_token() {
@@ -112,6 +115,31 @@ normalize_public_access_env() {
   if [[ "$WANT_TRAFFIC" == "1" ]]; then
     set_env_value TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "http://${host}:${traffic_ui_port}"
     export TRAFFIC_SIMULATOR_UI_EXTERNAL_URL="http://${host}:${traffic_ui_port}"
+  fi
+}
+
+normalize_alertmanager_smtp_env() {
+  local ses_region smtp_smarthost alert_to smtp_from smtp_user smtp_pass derived_smarthost
+  ses_region="$(read_env_var SES_SMTP_REGION "${SES_SMTP_REGION:-}")"
+  smtp_smarthost="$(read_env_var SMTP_SMARTHOST "${SMTP_SMARTHOST:-}")"
+
+  if [[ -z "$smtp_smarthost" && -n "$ses_region" ]]; then
+    derived_smarthost="email-smtp.${ses_region}.amazonaws.com:587"
+    set_env_value SMTP_SMARTHOST "$derived_smarthost"
+    export SMTP_SMARTHOST="$derived_smarthost"
+    smtp_smarthost="$derived_smarthost"
+    echo "OK: SMTP_SMARTHOST derivado de SES_SMTP_REGION (${ses_region})."
+  fi
+
+  if [[ "$WANT_MONITORING" == "1" ]]; then
+    alert_to="$(read_env_var ALERT_EMAIL_TO "${ALERT_EMAIL_TO:-}")"
+    smtp_from="$(read_env_var SMTP_FROM "${SMTP_FROM:-}")"
+    smtp_user="$(read_env_var SMTP_AUTH_USERNAME "${SMTP_AUTH_USERNAME:-}")"
+    smtp_pass="$(read_env_var SMTP_AUTH_PASSWORD "${SMTP_AUTH_PASSWORD:-}")"
+    if [[ -n "$alert_to" && ( -z "$smtp_smarthost" || -z "$smtp_from" || -z "$smtp_user" || -z "$smtp_pass" ) ]]; then
+      echo "WARN: ALERT_EMAIL_TO esta configurado, pero SMTP/SES esta incompleto; Alertmanager usara modo noop o no podra enviar emails." >&2
+      echo "WARN: Para Amazon SES verifica SMTP_FROM, crea credenciales SMTP de SES, revisa sandbox y define SMTP_SMARTHOST o SES_SMTP_REGION." >&2
+    fi
   fi
 }
 
@@ -341,6 +369,7 @@ fi
 export COMPOSE_PROFILES
 
 normalize_public_access_env
+normalize_alertmanager_smtp_env
 resolve_and_export_cadvisor_image_tag
 
 dump_diagnostics() {

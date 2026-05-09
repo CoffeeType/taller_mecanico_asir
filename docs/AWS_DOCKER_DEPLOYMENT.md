@@ -181,9 +181,62 @@ Comprueba al menos:
 - `APP_ENV=production`, `APP_DEBUG=false`
 - `DEPLOY_MONITORING=1` y `COMPOSE_PROFILES=monitoring,traffic` (**full stack** por defecto en `.env.aws.example`). Ajusta `MIN_MONITORING_MEM_MB` / `MIN_TRAFFIC_STACK_MEM_MB` o usa `FORCE_MONITORING_ON_LOW_MEM=1` / `ALLOW_DEGRADED_STACK=1` según memoria RAM+swap (recomendado **t3.medium+** o al menos ~4 GiB RAM+swap; el bootstrap crea 4 GiB de swap por defecto).
 - Para **solo** `web` + `mysql`: deja `COMPOSE_PROFILES` vacío y `DEPLOY_MONITORING=0`.
-- SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
+- SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Para Amazon SES puedes definir `SES_SMTP_REGION` y dejar `SMTP_SMARTHOST` vacío: los scripts rellenan `email-smtp.<region>.amazonaws.com:587`. Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
 
-#### 4b) Validación estática (opcional)
+#### 4b) Alertmanager con Amazon SES SMTP
+
+El flujo de alertas es: Prometheus evalúa [`monitoring/prometheus/alerts.yml`](../monitoring/prometheus/alerts.yml), envía las alertas a `alertmanager:9093` según [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml), y Alertmanager genera emails con la plantilla [`monitoring/alertmanager/alertmanager.yml`](../monitoring/alertmanager/alertmanager.yml). El contenedor usa [`monitoring/alertmanager/alertmanager-entrypoint.sh`](../monitoring/alertmanager/alertmanager-entrypoint.sh): si faltan `ALERT_EMAIL_TO`, `SMTP_SMARTHOST` o `SMTP_FROM`, arranca en modo **noop** para no romper el despliegue; cuando están completos, sustituye los placeholders `__SMTP_*__` y envía por SMTP.
+
+Para usar Amazon SES:
+
+1. En la consola de **Amazon SES**, elige la región desde la que vas a enviar. El endpoint SMTP tiene formato `email-smtp.<region>.amazonaws.com`.
+2. Verifica una identidad de envío: email o dominio. `SMTP_FROM` debe ser una identidad verificada en esa región.
+3. Si la cuenta está en **sandbox**, verifica también todos los destinatarios de `ALERT_EMAIL_TO` o solicita acceso a producción en SES.
+4. En **SES → SMTP settings**, crea credenciales SMTP. Usa esos valores en `SMTP_AUTH_USERNAME` y `SMTP_AUTH_PASSWORD`; no uses Access Keys IAM normales.
+5. Edita `.env` en el servidor:
+
+```bash
+ALERT_EMAIL_TO=destino@example.com
+SES_SMTP_REGION=eu-west-1
+SMTP_SMARTHOST=
+SMTP_FROM=monitoring@example.com
+SMTP_AUTH_USERNAME=TU_USUARIO_SMTP_SES
+SMTP_AUTH_PASSWORD=TU_PASSWORD_SMTP_SES
+SMTP_REQUIRE_TLS=true
+```
+
+También puedes omitir `SES_SMTP_REGION` y fijar `SMTP_SMARTHOST` directamente:
+
+```bash
+SMTP_SMARTHOST=email-smtp.eu-west-1.amazonaws.com:587
+```
+
+Aplica cambios:
+
+```bash
+cd /opt/taller_mecanico_asir
+./scripts/deploy_aws_docker.sh
+# o solo reinicia Alertmanager si no cambiaste nada mas:
+docker compose --env-file .env -f docker-compose.aws.yml up -d alertmanager
+```
+
+Prueba y diagnóstico:
+
+```bash
+docker compose --env-file .env -f docker-compose.aws.yml logs --tail 120 alertmanager
+curl -sf http://127.0.0.1:9093/-/healthy
+```
+
+Errores habituales:
+
+| Síntoma | Causa probable |
+|---------|----------------|
+| `554 Message rejected: Email address is not verified` | `SMTP_FROM` o destinatario no verificado, o SES sigue en sandbox. |
+| `535 Authentication Credentials Invalid` | Credenciales SMTP de SES incorrectas, región equivocada o se usaron Access Keys IAM normales. |
+| No llegan correos pero Alertmanager está sano | Revisa sandbox, límites SES, carpeta spam, `SMTP_FROM`, `ALERT_EMAIL_TO` y logs del contenedor. |
+| TLS/handshake falla | Usa puerto `587` y `SMTP_REQUIRE_TLS=true`; confirma que el SG/NACL permite salida TCP/587. |
+
+#### 4c) Validación estática (opcional)
 
 ```bash
 chmod +x scripts/verify_aws_stack.sh
@@ -318,6 +371,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 | `compose build requires buildx 0.17.0 or later` (AL2023) | El RPM `docker` puede traer Buildx antiguo. Instala plugin ≥ 0.17, p. ej. `curl` del release [buildx](https://github.com/docker/buildx/releases) a `/usr/libexec/docker/cli-plugins/docker-buildx` + `chmod +x`; el bootstrap ya fuerza Buildx reciente. Luego `SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh`. |
 | Alertmanager cae al arrancar / Prometheus no levanta | Comprueba montaje en [`docker-compose.aws.yml`](../docker-compose.aws.yml) (`alertmanager.yml` → `/etc/alertmanager/config/alertmanager.yml`) y logs: `docker compose logs alertmanager`. Sin correo configurado debe usarse config noop (entrypoint). |
 | `missing to address in email config` (Alertmanager) | Rellena `ALERT_EMAIL_TO` **y** como mínimo `SMTP_SMARTHOST` y `SMTP_FROM`, o deja correo vacío para modo noop hasta configurar SMTP. |
+| SES no envia email | Verifica identidad `SMTP_FROM`, destinatarios si SES esta en sandbox, credenciales SMTP de SES y endpoint `email-smtp.<region>.amazonaws.com:587`. |
 | Fallos raros al cargar `.env` en el despliegue | No edites `.env` con sintaxis rara en una sola línea; el deploy ya no hace `source .env`. Usa `docker compose ... --env-file .env` explícitamente si llamas a Compose a mano. |
 | `permission denied` al conectar a `/var/run/docker.sock` como `ec2-user` | Tras `usermod -a -G docker`, la sesión SSH **abierta** no recibe el grupo hasta **nueva conexión SSH** o `newgrp docker`. Comprueba `groups`. Temporalmente: `sudo docker ps`. ([Guía AWS — mismo aviso tras añadir el usuario al grupo `docker`](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker).) |
 

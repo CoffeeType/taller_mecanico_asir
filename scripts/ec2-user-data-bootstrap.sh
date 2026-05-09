@@ -183,7 +183,7 @@ raise_env_min_if_lower() {
 
 normalize_env_defaults() {
   local file="$1"
-  local host prometheus_port grafana_port alertmanager_port traffic_ui_port
+  local host prometheus_port grafana_port alertmanager_port traffic_ui_port ses_region smtp_smarthost
   raise_env_min_if_lower "$file" MIN_MONITORING_MEM_MB 3200
   raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 3600
   set_env_value "$file" MONITORING_UI_HOST_BIND "0.0.0.0"
@@ -200,6 +200,11 @@ normalize_env_defaults() {
   set_env_value "$file" PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
   set_env_value "$file" GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"
   set_env_value "$file" TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "http://${host}:${traffic_ui_port}"
+  ses_region="$(read_env_value "$file" SES_SMTP_REGION || true)"
+  smtp_smarthost="$(read_env_value "$file" SMTP_SMARTHOST || true)"
+  if [[ -z "$smtp_smarthost" && -n "$ses_region" ]]; then
+    set_env_value "$file" SMTP_SMARTHOST "email-smtp.${ses_region}.amazonaws.com:587"
+  fi
 }
 
 authorize_public_ui_ingress() {
