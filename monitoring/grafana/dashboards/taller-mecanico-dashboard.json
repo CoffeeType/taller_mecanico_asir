@@ -369,19 +369,29 @@
                    },
                    {
                        "id":  5,
-                       "title":  "Sesiones Activas y Usuarios",
+                       "title":  "Usuarios activos (BD) y registrados",
+                       "description":  "app_users_active: usuarios con last_seen_at actualizado por peticiones HTTP reales (ventana en etiqueta window_minutes; máximo cada ~60s por usuario). Requiere migración last_seen_at. app_users_total: filas en users_data.",
                        "type":  "stat",
                        "gridPos":  {
-                                       "h":  8,
+                                       "h":  10,
                                        "w":  12,
                                        "x":  12,
                                        "y":  13
                                    },
                        "targets":  [
                                        {
-                                           "expr":  "app_sessions_active",
-                                           "legendFormat":  "Sesiones",
+                                           "expr":  "max(app_users_active)",
+                                           "legendFormat":  "Activos (BD, ventana)",
                                            "refId":  "A",
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          }
+                                       },
+                                       {
+                                           "expr":  "max(app_users_total)",
+                                           "legendFormat":  "Registrados (BD)",
+                                           "refId":  "B",
                                            "datasource":  {
                                                               "type":  "prometheus",
                                                               "uid":  "prometheus"
@@ -416,14 +426,33 @@
                                                             "unit":  "short"
                                                         },
                                            "overrides":  [
-
+                                                             {
+                                                                 "matcher":  {
+                                                                                 "id":  "byName",
+                                                                                 "options":  "Registrados (BD)"
+                                                                             },
+                                                                 "properties":  [
+                                                                                    {
+                                                                                        "id":  "thresholds",
+                                                                                        "value":  {
+                                                                                                      "mode":  "absolute",
+                                                                                                      "steps":  [
+                                                                                                                    {
+                                                                                                                        "color":  "green",
+                                                                                                                        "value":  null
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                  }
+                                                                                    }
+                                                                                ]
+                                                             }
                                                          ]
                                        },
                        "options":  {
                                        "colorMode":  "background",
                                        "graphMode":  "area",
                                        "justifyMode":  "center",
-                                       "orientation":  "auto",
+                                       "orientation":  "horizontal",
                                        "reduceOptions":  {
                                                              "values":  false,
                                                              "calcs":  [
@@ -843,6 +872,7 @@
                    {
                        "id":  10,
                        "title":  "Métricas de Negocio",
+                       "description":  "app_users_total = cuentas en users_data. Activos recientes: panel \"Usuarios activos (BD) y registrados\" (app_users_active).",
                        "type":  "stat",
                        "gridPos":  {
                                        "h":  4,
@@ -852,7 +882,7 @@
                                    },
                        "targets":  [
                                        {
-                                           "expr":  "app_users_total",
+                                           "expr":  "max(app_users_total)",
                                            "legendFormat":  "Usuarios",
                                            "refId":  "A",
                                            "datasource":  {

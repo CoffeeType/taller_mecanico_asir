@@ -199,4 +199,34 @@ function sanitizarNombreArchivo($nombreOriginal) {
     $nombreBase = uniqid('img_', true) . '_' . time();
     return $nombreBase . '.' . $extension;
 }
+
+/**
+ * Persiste última actividad HTTP del usuario logueado en BD (fuente de verdad para métricas).
+ * Escritura como máximo cada 60s por sesión para no saturar MySQL.
+ */
+function touchLoggedInUserLastSeen(): void {
+    if (!isLoggedIn()) {
+        return;
+    }
+    global $pdo;
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+    $uid = (int) ($_SESSION['user_id'] ?? 0);
+    if ($uid <= 0) {
+        return;
+    }
+    $now = time();
+    $minSeconds = 60;
+    if (isset($_SESSION['_last_seen_db_at']) && ($now - (int) $_SESSION['_last_seen_db_at']) < $minSeconds) {
+        return;
+    }
+    try {
+        $stmt = $pdo->prepare('UPDATE users_login SET last_seen_at = CURRENT_TIMESTAMP WHERE idUser = ?');
+        $stmt->execute([$uid]);
+        $_SESSION['_last_seen_db_at'] = $now;
+    } catch (PDOException $e) {
+        error_log('touchLoggedInUserLastSeen: ' . $e->getMessage());
+    }
+}
 ?>

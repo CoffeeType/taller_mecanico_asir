@@ -61,8 +61,26 @@ function countTableRows($pdo, $table) {
     }
 }
 
+function countUsersActiveRecent($pdo, int $minutes): int {
+    $minutes = max(1, min(1440, $minutes));
+    try {
+        $sql = 'SELECT COUNT(*) AS c FROM users_login WHERE last_seen_at IS NOT NULL AND last_seen_at >= DATE_SUB(NOW(), INTERVAL ' . $minutes . ' MINUTE)';
+        $stmt = $pdo->query($sql);
+        $row = $stmt->fetch();
+        return (int) ($row['c'] ?? 0);
+    } catch (PDOException $e) {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'Unknown column') !== false || stripos($msg, "doesn't exist") !== false) {
+            error_log('countUsersActiveRecent: ejecuta database/migrations/add_users_login_last_seen_at.sql — ' . $msg);
+        } else {
+            error_log('countUsersActiveRecent: ' . $msg);
+        }
+        return 0;
+    }
+}
+
 // Función para obtener métricas de la base de datos
-function obtenerMetricasBD($pdo) {
+function obtenerMetricasBD($pdo, int $activeWindowMinutes = 15) {
     global $dbConnectionHealthy;
     $metricas = [];
 
@@ -70,7 +88,7 @@ function obtenerMetricasBD($pdo) {
     $dbConnectionHealthy = verificarSaludBD($pdo);
 
     if ($dbConnectionHealthy === 0) {
-        return $metricas;
+        return [];
     }
 
     // Total de usuarios
@@ -114,39 +132,10 @@ function obtenerMetricasBD($pdo) {
     // Total de consejos
     $metricas['app_consejos_total'] = countTableRows($pdo, 'consejos');
 
-    // Sesiones activas (aproximado por sesiones PHP)
-    $sessionCount = obtenerSesionesActivas();
-    $metricas['app_sessions_active'] = $sessionCount;
+    // Usuarios con actividad HTTP persistida (BD), ventana configurable
+    $metricas['app_users_active'] = countUsersActiveRecent($pdo, $activeWindowMinutes);
 
     return $metricas;
-}
-
-// Función para obtener sesiones activas (aproximado)
-function obtenerSesionesActivas() {
-    try {
-        $sessionPath = session_save_path();
-        if (empty($sessionPath)) {
-            $sessionPath = sys_get_temp_dir();
-        }
-        
-        $count = 0;
-        if (is_dir($sessionPath)) {
-            $files = glob($sessionPath . '/sess_*');
-            if ($files) {
-                // Contar solo sesiones modificadas en la última hora
-                $oneHourAgo = time() - 3600;
-                foreach ($files as $file) {
-                    if (is_file($file) && filemtime($file) > $oneHourAgo) {
-                        $count++;
-                    }
-                }
-            }
-        }
-        return $count;
-    } catch (Exception $e) {
-        error_log("Error obteniendo sesiones activas: " . $e->getMessage());
-        return 0;
-    }
 }
 
 // Función para obtener la ruta del directorio de logs
@@ -263,9 +252,10 @@ function obtenerMetricasTiempoRespuesta() {
 }
 
 // Obtener todas las métricas
+$usersActiveWindowMin = max(1, min(1440, (int)(getenv('APP_USERS_ACTIVE_WINDOW_MINUTES') ?: 15)));
 try {
     if ($pdo !== null) {
-        $metricasBD = obtenerMetricasBD($pdo);
+        $metricasBD = obtenerMetricasBD($pdo, $usersActiveWindowMin);
     } else {
         $metricasBD = [];
         $dbConnectionHealthy = 0;
@@ -319,9 +309,9 @@ echo "# HELP app_consejos_total Total de consejos\n";
 echo "# TYPE app_consejos_total gauge\n";
 echo "app_consejos_total " . ($metricasBD['app_consejos_total'] ?? 0) . "\n\n";
 
-echo "# HELP app_sessions_active Sesiones activas\n";
-echo "# TYPE app_sessions_active gauge\n";
-echo "app_sessions_active " . ($metricasBD['app_sessions_active'] ?? 0) . "\n\n";
+echo "# HELP app_users_active Usuarios distintos con last_seen_at en BD dentro de la ventana (actividad HTTP registrada por la app)\n";
+echo "# TYPE app_users_active gauge\n";
+echo 'app_users_active{window_minutes="' . $usersActiveWindowMin . '"} ' . ($metricasBD['app_users_active'] ?? 0) . "\n\n";
 
 echo "# HELP app_http_requests_total Total de requests HTTP\n";
 echo "# TYPE app_http_requests_total counter\n";

@@ -51,9 +51,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://web/
-          - http://web/login.php
-          - http://web/citaciones.php
+          - http://web/health.php
           - http://web/metrics.php
     relabel_configs:
       - source_labels: [__address__]

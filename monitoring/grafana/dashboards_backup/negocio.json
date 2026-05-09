@@ -339,13 +339,13 @@
       },
       {
         "id": 6,
-        "title": "Sesiones Activas",
+        "title": "Usuarios activos (BD)",
         "type": "stat",
         "gridPos": {"h": 4, "w": 6, "x": 18, "y": 4},
         "targets": [
           {
-            "expr": "app_sessions_active",
-            "legendFormat": "Sesiones",
+            "expr": "max(app_users_active)",
+            "legendFormat": "Activos",
             "refId": "A",
             "datasource": {
               "type": "prometheus",

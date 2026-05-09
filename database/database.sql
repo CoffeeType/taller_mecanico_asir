@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS users_login (
     usuario VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     rol ENUM('admin', 'user') NOT NULL DEFAULT 'user',
-    FOREIGN KEY (idUser) REFERENCES users_data(idUser) ON DELETE CASCADE
+    last_seen_at TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (idUser) REFERENCES users_data(idUser) ON DELETE CASCADE,
+    INDEX idx_users_login_last_seen_at (last_seen_at)
 );
 
 -- Table: citas

@@ -74,7 +74,23 @@ docker-compose ps
 
 ### Probes HTTP sintéticos (Blackbox)
 
-Prometheus hace probe GET desde `blackbox-exporter` hacia `web` (Docker DNS): `/`, `/login.php`, `/citaciones.php`, `/metrics.php`. La alerta `BlackboxProbeFailed` indica caída real de Apache/app aunque los exporters sigan vivos. Configuración del módulo: [monitoring/prometheus/blackbox.yml](monitoring/prometheus/blackbox.yml).
+Prometheus hace probe GET desde `blackbox-exporter` hacia `web` (Docker DNS): **`/health.php`** (sin `session_start`, solo texto `ok`) y **`/metrics.php`** (endpoint Prometheus). Así las comprobaciones de disponibilidad no crean ficheros de sesión PHP. La alerta `BlackboxProbeFailed` indica caída real de Apache/app aunque los exporters sigan vivos. Configuración del módulo: [monitoring/prometheus/blackbox.yml](monitoring/prometheus/blackbox.yml).
+
+### Diferenciar métricas en Grafana (usuarios vs MySQL)
+
+| Métrica | Fuente |
+|---------|--------|
+| `app_users_active{window_minutes="…"}` | **COUNT** en `users_login` donde `last_seen_at` cae en la ventana (actualizado por peticiones HTTP reales con usuario logueado; escritura a BD como máximo cada ~60 s por sesión). Sin ficheros `sess_*`. |
+| `app_users_total` | **COUNT** de `users_data` (cuentas registradas). |
+| `mysql_global_status_threads_connected` | Conexiones al servidor MySQL (pool, exporters, PHP), no usuarios web. |
+
+Antes de usar `app_users_active`, aplicar la migración `database/migrations/add_users_login_last_seen_at.sql` en la base existente.
+
+Variables de entorno opcionales:
+
+- `APP_USERS_ACTIVE_WINDOW_MINUTES` (por defecto `15`): ancho de ventana para “activo reciente” en la consulta SQL y en la etiqueta Prometheus `window_minutes`.
+
+Prometheus: usa `max(app_users_active)` si varios targets scrapean la misma app (misma BD); **no** `sum()` para evitar duplicar el mismo recuento.
 
 ### Simulador de tráfico y línea base HTTP
 
@@ -399,14 +415,14 @@ rate(mysql_global_status_slow_queries[5m])
 
 ### Negocio
 ```promql
-# Usuarios totales
+# Usuarios totales registrados
 app_users_total
+
+# Usuarios con actividad HTTP reflejada en BD (ventana en etiqueta window_minutes)
+app_users_active
 
 # Citas totales
 app_citas_total
-
-# Sesiones activas
-app_sessions_active
 ```
 
 ## 🔒 Seguridad

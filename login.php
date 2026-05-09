@@ -37,6 +37,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
+                try {
+                    $lu = $pdo->prepare('UPDATE users_login SET last_seen_at = CURRENT_TIMESTAMP WHERE idUser = ?');
+                    $lu->execute([(int) $user['idUser']]);
+                } catch (PDOException $e) {
+                    error_log('login last_seen_at: ' . $e->getMessage());
+                }
+
                 setFlashMessage('success', "Bienvenido " . $user['usuario']);
                 redirect('index.php');
             } else {
