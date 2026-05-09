@@ -199,6 +199,7 @@ normalize_env_defaults() {
   traffic_ui_port="$(read_env_value "$file" TRAFFIC_SIMULATOR_UI_HOST_PORT || printf '8890')"
   set_env_value "$file" PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
   set_env_value "$file" GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"
+  set_env_value "$file" ALERTMANAGER_EXTERNAL_URL "http://${host}:${alertmanager_port}"
   set_env_value "$file" TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "http://${host}:${traffic_ui_port}"
   ses_region="$(read_env_value "$file" SES_SMTP_REGION || true)"
   smtp_smarthost="$(read_env_value "$file" SMTP_SMARTHOST || true)"

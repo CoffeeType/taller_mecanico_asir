@@ -105,6 +105,8 @@ Con el `.env.aws.example`, el despliegue deja las UIs accesibles por IP/DNS púb
 
 `scripts/deploy_aws_docker.sh` imprime estas URLs al final. Si hay permisos IAM, también autoriza reglas del Security Group para `3000`, `9090`, `9093`, `8890` usando `MONITORING_SG_CIDR` (por defecto `0.0.0.0/0` en laboratorio).
 
+**URL pública de Alertmanager (UI):** `deploy_aws_docker.sh` y [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) escriben `ALERTMANAGER_EXTERNAL_URL=http://<host>:<ALERTMANAGER_HOST_PORT>` en `.env`, donde `<host>` es `PUBLIC_ACCESS_HOST` si lo defines, o el **public hostname / public IPv4** de la instancia vía metadata EC2. El contenedor pasa esa URL a Alertmanager como `--web.external-url` (en [`monitoring/alertmanager/alertmanager-entrypoint.sh`](../monitoring/alertmanager/alertmanager-entrypoint.sh)) para que enlaces y rutas de la UI coincidan con el acceso real. Si Alertmanager va detrás de un proxy con prefijo de ruta, define `ALERTMANAGER_ROUTE_PREFIX` (por defecto `/`).
+
 ## Despliegue manual en EC2
 
 ### Opción A — Amazon Linux 2023 (recomendada para [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh))
@@ -182,10 +184,11 @@ Comprueba al menos:
 - `DEPLOY_MONITORING=1` y `COMPOSE_PROFILES=monitoring,traffic` (**full stack** por defecto en `.env.aws.example`). Ajusta `MIN_MONITORING_MEM_MB` / `MIN_TRAFFIC_STACK_MEM_MB` o usa `FORCE_MONITORING_ON_LOW_MEM=1` / `ALLOW_DEGRADED_STACK=1` según memoria RAM+swap (recomendado **t3.medium+** o al menos ~4 GiB RAM+swap; el bootstrap crea 4 GiB de swap por defecto).
 - Para **solo** `web` + `mysql`: deja `COMPOSE_PROFILES` vacío y `DEPLOY_MONITORING=0`.
 - SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Para Amazon SES puedes definir `SES_SMTP_REGION` y dejar `SMTP_SMARTHOST` vacío: los scripts rellenan `email-smtp.<region>.amazonaws.com:587`. Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
+- URLs públicas de UIs (`PROMETHEUS_EXTERNAL_URL`, `GRAFANA_EXTERNAL_URL`, `ALERTMANAGER_EXTERNAL_URL`, `TRAFFIC_SIMULATOR_UI_EXTERNAL_URL`): el deploy las actualiza con metadata EC2 si no fijas `PUBLIC_ACCESS_HOST`.
 
 #### 4b) Alertmanager con Amazon SES SMTP
 
-El flujo de alertas es: Prometheus evalúa [`monitoring/prometheus/alerts.yml`](../monitoring/prometheus/alerts.yml), envía las alertas a `alertmanager:9093` según [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml), y Alertmanager genera emails con la plantilla [`monitoring/alertmanager/alertmanager.yml`](../monitoring/alertmanager/alertmanager.yml). El contenedor usa [`monitoring/alertmanager/alertmanager-entrypoint.sh`](../monitoring/alertmanager/alertmanager-entrypoint.sh): si faltan `ALERT_EMAIL_TO`, `SMTP_SMARTHOST` o `SMTP_FROM`, arranca en modo **noop** para no romper el despliegue; cuando están completos, sustituye los placeholders `__SMTP_*__` y envía por SMTP.
+El flujo de alertas es: Prometheus evalúa [`monitoring/prometheus/alerts.yml`](../monitoring/prometheus/alerts.yml), envía las alertas a `alertmanager:9093` según [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml), y Alertmanager genera emails con la plantilla [`monitoring/alertmanager/alertmanager.yml`](../monitoring/alertmanager/alertmanager.yml). El contenedor usa [`monitoring/alertmanager/alertmanager-entrypoint.sh`](../monitoring/alertmanager/alertmanager-entrypoint.sh): si faltan `ALERT_EMAIL_TO`, `SMTP_SMARTHOST` o `SMTP_FROM`, arranca en modo **noop** para no romper el despliegue; cuando están completos, sustituye los placeholders `__SMTP_*__` y envía por SMTP. En EC2, si `ALERTMANAGER_EXTERNAL_URL` está definido (lo normal tras `deploy_aws_docker.sh`), Alertmanager arranca con `--web.external-url` y `--web.route-prefix` (`ALERTMANAGER_ROUTE_PREFIX`, por defecto `/`) para que la UI no genere enlaces incorrectos al acceder por `http://IP:9093`.
 
 Para usar Amazon SES:
 
@@ -225,6 +228,8 @@ Prueba y diagnóstico:
 ```bash
 docker compose --env-file .env -f docker-compose.aws.yml logs --tail 120 alertmanager
 curl -sf http://127.0.0.1:9093/-/healthy
+curl -sf http://127.0.0.1:9093/ | head -c 400
+# La página debe contener "Alertmanager"; no debe ser el índice PHP del taller (puerto WEB_HOST_PORT, por defecto 80).
 ```
 
 Errores habituales:
@@ -263,6 +268,8 @@ curl -sf http://127.0.0.1/ | head
 # Con perfiles monitoring:
 curl -sf http://127.0.0.1:9090/-/healthy
 curl -sf http://127.0.0.1:3000/api/health
+curl -sf http://127.0.0.1:9093/-/healthy
+curl -sf http://127.0.0.1:9093/ | grep -qi Alertmanager && echo OK_alertmanager_ui
 # Con perfil traffic (UI, puerto TRAFFIC_SIMULATOR_UI_HOST_PORT):
 curl -sf http://127.0.0.1:8890/health.php
 ```

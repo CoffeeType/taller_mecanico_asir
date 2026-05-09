@@ -38,10 +38,16 @@ if ! email_ready; then
   fi
   write_noop_config
   echo "Configuration written at $OUT_PATH"
-  exec /bin/alertmanager \
+  set -- /bin/alertmanager \
     --config.file="$OUT_PATH" \
     --storage.path=/alertmanager \
     --web.listen-address=:9093
+  if [ -n "${ALERTMANAGER_EXTERNAL_URL:-}" ]; then
+    set -- "$@" \
+      --web.external-url="${ALERTMANAGER_EXTERNAL_URL}" \
+      --web.route-prefix="${ALERTMANAGER_ROUTE_PREFIX:-/}"
+  fi
+  exec "$@"
 fi
 
 if [ -z "$TEMPLATE_PATH" ] || [ ! -f "$TEMPLATE_PATH" ]; then
@@ -78,7 +84,13 @@ sed \
 
 echo "Configuration generated at $OUT_PATH"
 
-exec /bin/alertmanager \
+set -- /bin/alertmanager \
   --config.file="$OUT_PATH" \
   --storage.path=/alertmanager \
   --web.listen-address=:9093
+if [ -n "${ALERTMANAGER_EXTERNAL_URL:-}" ]; then
+  set -- "$@" \
+    --web.external-url="${ALERTMANAGER_EXTERNAL_URL}" \
+    --web.route-prefix="${ALERTMANAGER_ROUTE_PREFIX:-/}"
+fi
+exec "$@"

@@ -108,8 +108,10 @@ normalize_public_access_env() {
   if [[ "$WANT_MONITORING" == "1" ]]; then
     set_env_value PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
     set_env_value GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"
+    set_env_value ALERTMANAGER_EXTERNAL_URL "http://${host}:${alertmanager_port}"
     export PROMETHEUS_EXTERNAL_URL="http://${host}:${prometheus_port}"
     export GRAFANA_EXTERNAL_URL="http://${host}:${grafana_port}"
+    export ALERTMANAGER_EXTERNAL_URL="http://${host}:${alertmanager_port}"
   fi
 
   if [[ "$WANT_TRAFFIC" == "1" ]]; then
@@ -181,6 +183,23 @@ assert_public_port_bind() {
     return 1
   fi
   echo "OK: ${svc}:${container_port} publicado en ${out}"
+}
+
+# Comprueba que :ALERTMANAGER_HOST sirve la UI de Alertmanager y no la app web del taller (puerto WEB_HOST_PORT).
+smoke_alertmanager_ui() {
+  local am_port="$1" web_port="$2"
+  local body
+  body="$(curl -sf --max-time 15 "http://127.0.0.1:${am_port}/" 2>/dev/null || true)"
+  [[ -n "$body" ]] || { echo "ERROR: Alertmanager GET / vacio o fallo en puerto ${am_port}" >&2; return 1; }
+  if ! printf '%s' "$body" | grep -qi 'Alertmanager'; then
+    echo "ERROR: puerto ${am_port} no parece UI Alertmanager (respuesta sin 'Alertmanager'; posible proxy equivocado a app web)" >&2
+    return 1
+  fi
+  if curl -sI --max-time 10 "http://127.0.0.1:${am_port}/" 2>/dev/null | grep -qiE "^[Ll]ocation:.*:${web_port}(/|[[:space:]]|$)"; then
+    echo "ERROR: Alertmanager redirige a puerto app web ${web_port}" >&2
+    return 1
+  fi
+  echo "OK: Alertmanager UI root (localhost:${am_port})"
 }
 
 print_browser_urls() {
@@ -573,6 +592,7 @@ if [[ "$WANT_MONITORING" == "1" ]]; then
   echo "OK: Grafana health (localhost)"
   curl -sf "http://127.0.0.1:${ALERTMANAGER_HOST_PORT}/-/healthy" >/dev/null || { echo "ERROR: Alertmanager no healthy" >&2; exit 1; }
   echo "OK: Alertmanager healthy (localhost)"
+  smoke_alertmanager_ui "$ALERTMANAGER_HOST_PORT" "$WEB_HOST_PORT" || exit 1
   assert_public_port_bind grafana 3000 "$GRAFANA_HOST_PORT"
   assert_public_port_bind prometheus 9090 "$PROMETHEUS_HOST_PORT"
   assert_public_port_bind alertmanager 9093 "$ALERTMANAGER_HOST_PORT"
