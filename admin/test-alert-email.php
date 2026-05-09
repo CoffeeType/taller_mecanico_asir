@@ -13,6 +13,10 @@ if (!isAdmin()) {
     redirect('../index.php');
 }
 
+$alertmanagerUiUrl = getenv('ALERTMANAGER_EXTERNAL_URL') ?: 'http://localhost:9093';
+$prometheusExternalUrl = getenv('PROMETHEUS_EXTERNAL_URL') ?: 'http://localhost:9090';
+$prometheusAlertsUrl = rtrim($prometheusExternalUrl, '/') . '/alerts';
+
 function sendAlertmanagerTestAlert(array $payload) {
     $url = 'http://alertmanager:9093/api/v2/alerts';
     $json = json_encode([$payload], JSON_UNESCAPED_SLASHES);
@@ -169,10 +173,10 @@ require_once '../includes/header.php';
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-send me-1"></i>Enviar email de prueba
                     </button>
-                    <a class="btn btn-outline-secondary ms-2" target="_blank" href="http://localhost:9093">
+                    <a class="btn btn-outline-secondary ms-2" target="_blank" href="<?= htmlspecialchars($alertmanagerUiUrl, ENT_QUOTES, 'UTF-8') ?>">
                         Abrir Alertmanager
                     </a>
-                    <a class="btn btn-outline-secondary ms-2" target="_blank" href="http://localhost:9090/alerts">
+                    <a class="btn btn-outline-secondary ms-2" target="_blank" href="<?= htmlspecialchars($prometheusAlertsUrl, ENT_QUOTES, 'UTF-8') ?>">
                         Abrir Prometheus Alerts
                     </a>
                 </div>

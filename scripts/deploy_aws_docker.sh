@@ -218,6 +218,73 @@ print_browser_urls() {
   echo "Si no abre desde navegador, revisa Security Group/IAM: puertos ${GRAFANA_HOST_PORT},${PROMETHEUS_HOST_PORT},${ALERTMANAGER_HOST_PORT},${TRAFFIC_UI_PORT}."
 }
 
+# Valores por defecto del dashboard Grafana (textbox taller_app_base / prometheus_base) alineados con metadata EC2 / PUBLIC_ACCESS_HOST.
+patch_grafana_dashboard_public_urls() {
+  [[ "$WANT_MONITORING" != "1" ]] && return 0
+  local host web_port app_base prom_base dash tmp
+  dash="${PROJECT_DIR}/monitoring/grafana/dashboards/taller-mecanico-dashboard.json"
+  [[ -f "$dash" ]] || {
+    echo "WARN: dashboard JSON no encontrado: $dash" >&2
+    return 0
+  }
+
+  host="$(public_browser_host)"
+  web_port="$(read_env_var WEB_HOST_PORT 80)"
+  if [[ "$web_port" == "80" ]]; then
+    app_base="http://${host}"
+  else
+    app_base="http://${host}:${web_port}"
+  fi
+  prom_base="$(read_env_var PROMETHEUS_EXTERNAL_URL "")"
+  if [[ -z "$prom_base" ]]; then
+    prom_base="http://${host}:$(read_env_var PROMETHEUS_HOST_PORT 9090)"
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    APP_BASE_JSON="$app_base" PROM_BASE_JSON="$prom_base" python3 - "$dash" <<'PY'
+import json, os, sys
+
+path = sys.argv[1]
+app = os.environ["APP_BASE_JSON"]
+prom = os.environ["PROM_BASE_JSON"]
+with open(path, encoding="utf-8") as f:
+    d = json.load(f)
+changed = False
+for item in d.get("templating", {}).get("list", []):
+    name = item.get("name")
+    if name == "taller_app_base":
+        item["query"] = app
+        item["current"] = {"selected": True, "text": app, "value": app}
+        changed = True
+    elif name == "prometheus_base":
+        item["query"] = prom
+        item["current"] = {"selected": True, "text": prom, "value": prom}
+        changed = True
+if not changed:
+    sys.exit(0)
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(d, f, indent=4, ensure_ascii=False)
+    f.write("\n")
+PY
+    echo "OK: Grafana dashboard URLs (python3): app=${app_base} prom=${prom_base}"
+    return 0
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    jq --arg app "$app_base" --arg prom "$prom_base" \
+      '.templating.list |= map(
+        if .name == "taller_app_base" then . * {query: $app, current: {selected: true, text: $app, value: $app}}
+        elif .name == "prometheus_base" then . * {query: $prom, current: {selected: true, text: $prom, value: $prom}}
+        else . end)' \
+      "$dash" >"$tmp" && mv "$tmp" "$dash"
+    echo "OK: Grafana dashboard URLs (jq): app=${app_base} prom=${prom_base}"
+    return 0
+  fi
+
+  echo "WARN: sin python3 ni jq; no se actualizaron URLs del dashboard Grafana." >&2
+}
+
 # Pin si no hay .env / API (debe coincidir con docker-compose.aws.yml :-${CADVISOR_IMAGE_TAG:-...}).
 CADVISOR_IMAGE_TAG_FALLBACK="${CADVISOR_IMAGE_TAG_FALLBACK:-0.56.2}"
 
@@ -411,6 +478,8 @@ ALERTMANAGER_HOST_PORT="$(read_env_var ALERTMANAGER_HOST_PORT 9093)"
 TRAFFIC_UI_PORT="$(read_env_var TRAFFIC_SIMULATOR_UI_HOST_PORT 8890)"
 CADVISOR_HOST_PORT="$(read_env_var CADVISOR_HOST_PORT 8080)"
 TELEGRAF_HOST_PORT="$(read_env_var TELEGRAF_HOST_PORT 9273)"
+
+patch_grafana_dashboard_public_urls
 
 authorize_public_ui_ingress
 

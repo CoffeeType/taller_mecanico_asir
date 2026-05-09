@@ -175,8 +175,24 @@ docker-compose up -d alertmanager prometheus
 
 ### Enviar un email de prueba (desde Grafana)
 
-- Entra en Grafana → Dashboard principal → link `Test Email (Alertas)` (abre `http://localhost:8081/admin/test-alert-email.php` o el valor de `WEB_PORT`).
+- En **despliegue AWS** con [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh), el script actualiza en disco los valores por defecto del dashboard **App PHP (URL base)** y **Prometheus (URL base)** según metadata EC2 / `PUBLIC_ACCESS_HOST` y `WEB_HOST_PORT`, para que no tengas que editarlos a mano en Grafana (el fichero se reescribe en `monitoring/grafana/dashboards/`; Grafana los recarga por provisioning).
+- Entra en Grafana → Dashboard **Taller Mecánico - Dashboard Principal** → enlace del menú **Test Email (Alertas)** → `${taller_app_base}/admin/test-alert-email.php`.
 - Requiere iniciar sesión como admin en la aplicación.
+
+### Alertmanager: la UI no incluye «enviar email de prueba»
+
+La interfaz web oficial de **Alertmanager** no trae un botón para enviar un correo de prueba (limitación habitual del proyecto Prometheus). Para validar SMTP y receptores puedes:
+
+1. **Panel admin** del taller: [`admin/test-alert-email.php`](../admin/test-alert-email.php) (envía una alerta sintética por la API interna a `alertmanager:9093`; los enlaces «Abrir Alertmanager» / «Prometheus Alerts» usan `ALERTMANAGER_EXTERNAL_URL` y `PROMETHEUS_EXTERNAL_URL` en AWS).
+2. **API desde la instancia** (requiere SMTP configurado), misma idea que el PHP — POST a `/api/v2/alerts`:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:9093/api/v2/alerts" \
+  -H "Content-Type: application/json" \
+  -d '[{"labels":{"alertname":"ManualTestEmail","severity":"warning","service":"taller-mecanico","component":"monitoring","instance":"manual"},"annotations":{"summary":"Email de prueba (curl)","description":"Prueba manual."},"startsAt":"2026-01-01T12:00:00.000Z","endsAt":"2026-01-01T12:15:00.000Z"}]'
+```
+
+Sustituye `startsAt` / `endsAt` por timestamps RFC3339 recientes (Alertmanager ignora alertas demasiado antiguas).
 
 ### Alertas Críticas (severidad `critical`)
 

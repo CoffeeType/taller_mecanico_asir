@@ -1690,7 +1690,32 @@
                ],
     "templating":  {
                        "list":  [
-
+                                    {
+                                        "current":  {
+                                                        "selected":  true,
+                                                        "text":  "http://localhost:9090",
+                                                        "value":  "http://localhost:9090"
+                                                    },
+                                        "hide":  0,
+                                        "label":  "Prometheus (URL base)",
+                                        "name":  "prometheus_base",
+                                        "query":  "http://localhost:9090",
+                                        "skipUrlSync":  false,
+                                        "type":  "textbox"
+                                    },
+                                    {
+                                        "current":  {
+                                                        "selected":  true,
+                                                        "text":  "http://localhost:8081",
+                                                        "value":  "http://localhost:8081"
+                                                    },
+                                        "hide":  0,
+                                        "label":  "App PHP (URL base)",
+                                        "name":  "taller_app_base",
+                                        "query":  "http://localhost:8081",
+                                        "skipUrlSync":  false,
+                                        "type":  "textbox"
+                                    }
                                 ]
                    },
     "annotations":  {
@@ -1722,7 +1747,7 @@
                       "title":  "Prometheus",
                       "tooltip":  "Ir a Prometheus",
                       "type":  "link",
-                      "url":  "http://localhost:9090"
+                      "url":  "${prometheus_base}"
                   },
                   {
                       "asDropdown":  false,
@@ -1734,9 +1759,9 @@
                                ],
                       "targetBlank":  true,
                       "title":  "Test Email (Alertas)",
-                      "tooltip":  "Enviar un email de prueba vía Alertmanager",
+                      "tooltip":  "Enviar un email de prueba (URL = variable App PHP + /admin/test-alert-email.php). Ajusta App PHP arriba si no es localhost:8081.",
                       "type":  "link",
-                      "url":  "http://localhost:8081/admin/test-alert-email.php"
+                      "url":  "${taller_app_base}/admin/test-alert-email.php"
                   },
                   {
                       "asDropdown":  false,

@@ -241,6 +241,10 @@ Errores habituales:
 | No llegan correos pero Alertmanager está sano | Revisa sandbox, límites SES, carpeta spam, `SMTP_FROM`, `ALERT_EMAIL_TO` y logs del contenedor. |
 | TLS/handshake falla | Usa puerto `587` y `SMTP_REQUIRE_TLS=true`; confirma que el SG/NACL permite salida TCP/587. |
 
+#### UI de Alertmanager y email de prueba
+
+La interfaz web de Alertmanager **no** incluye un botón para enviar un correo de prueba (comportamiento estándar upstream). Para validar correo: usa el panel admin [`admin/test-alert-email.php`](../admin/test-alert-email.php) (tras iniciar sesión) o un POST a `http://127.0.0.1:9093/api/v2/alerts` desde la instancia; detalle en [`docs/MONITORING_SETUP_GUIDE.md`](MONITORING_SETUP_GUIDE.md).
+
 #### 4c) Validación estática (opcional)
 
 ```bash
