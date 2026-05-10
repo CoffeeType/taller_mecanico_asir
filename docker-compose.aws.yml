@@ -260,17 +260,23 @@ services:
     build:
       context: .
       dockerfile: docker/traffic-simulator/Dockerfile
+      args:
+        JMETER_VERSION: ${JMETER_VERSION:-5.6.3}
     profiles:
       - traffic
-    cpus: "${TRAFFIC_SIMULATOR_CPUS:-0.15}"
-    mem_limit: "${TRAFFIC_SIMULATOR_MEM_LIMIT:-256m}"
-    memswap_limit: "${TRAFFIC_SIMULATOR_MEMSWAP_LIMIT:-384m}"
+    cpus: "${TRAFFIC_SIMULATOR_CPUS:-0.35}"
+    mem_limit: "${TRAFFIC_SIMULATOR_MEM_LIMIT:-512m}"
+    memswap_limit: "${TRAFFIC_SIMULATOR_MEMSWAP_LIMIT:-768m}"
     environment:
       - SIM_BASE_URL=${SIM_BASE_URL:-http://web}
       - SIM_LOG_DIR=/var/www/html/logs
       - SIMULATOR_CONTROL_TOKEN=${SIMULATOR_CONTROL_TOKEN:-changeme_traffic_sim_secret}
       - SIMULATOR_CONTROL_PORT=8085
       - SIM_ROUTES_FILE=${SIM_ROUTES_FILE:-}
+      - SIM_JMETER_BIN=${SIM_JMETER_BIN:-/opt/apache-jmeter/bin/jmeter}
+      - SIM_JMETER_WORK_DIR=${SIM_JMETER_WORK_DIR:-/var/www/html/logs/jmeter}
+      - SIM_JMETER_HEAP=${SIM_JMETER_HEAP:--Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m}
+      - SIM_JMETER_HTML_REPORT=${SIM_JMETER_HTML_REPORT:-true}
       - SIM_EXTERNAL_TARGETS_ENABLED=${SIM_EXTERNAL_TARGETS_ENABLED:-true}
       - SIM_REQUIRE_EXTERNAL_CONFIRMATION=${SIM_REQUIRE_EXTERNAL_CONFIRMATION:-true}
       - SIM_INTERNAL_HOSTS=${SIM_INTERNAL_HOSTS:-web,localhost,127.0.0.1,::1,mysql,host.docker.internal}

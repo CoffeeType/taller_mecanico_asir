@@ -202,6 +202,46 @@ smoke_alertmanager_ui() {
   echo "OK: Alertmanager UI root (localhost:${am_port})"
 }
 
+traffic_simulator_log_count() {
+  compose exec -T traffic-simulator sh -lc 'f="${SIM_LOG_DIR:-/var/www/html/logs}/metrics.log"; if [ -f "$f" ]; then grep -c "source=simulator" "$f" 2>/dev/null || true; else printf "0"; fi' | tr -dc '0-9'
+}
+
+smoke_jmeter_traffic() {
+  [[ "$(read_env_var SKIP_TRAFFIC_SMOKE "${SKIP_TRAFFIC_SMOKE:-0}")" == "1" ]] && { echo "SKIP_TRAFFIC_SMOKE=1: omito smoke JMeter."; return 0; }
+  local tok before after payload deadline now
+  tok="$(read_env_var SIMULATOR_CONTROL_TOKEN "")"
+  [[ -n "$tok" ]] || { echo "ERROR: SIMULATOR_CONTROL_TOKEN vacio; no puedo probar JMeter." >&2; return 1; }
+
+  before="$(traffic_simulator_log_count)"
+  before="${before:-0}"
+  payload='{"users":1,"duration":5,"profile":"burst","base_url":"http://web","confirm_external":true}'
+
+  compose exec -T -e SIM_TOKEN="$tok" traffic-simulator sh -lc \
+    'curl -sf -X POST -H "Content-Type: application/json" -H "X-Simulator-Token: ${SIM_TOKEN}" --data "{}" http://127.0.0.1:8085/stop >/dev/null || true'
+  sleep 2
+  compose exec -T -e SIM_TOKEN="$tok" -e SIM_PAYLOAD="$payload" traffic-simulator sh -lc \
+    'curl -sf -H "Content-Type: application/json" -H "X-Simulator-Token: ${SIM_TOKEN}" --data "${SIM_PAYLOAD}" http://127.0.0.1:8085/start >/dev/null'
+
+  deadline=$(($(date +%s) + ${TRAFFIC_SMOKE_TIMEOUT_SEC:-120}))
+  while [[ "$(date +%s)" -lt "$deadline" ]]; do
+    after="$(traffic_simulator_log_count)"
+    after="${after:-0}"
+    if [[ "$after" =~ ^[0-9]+$ && "$after" -gt "$before" ]]; then
+      echo "OK: Apache JMeter genero trafico source=simulator (${before} -> ${after} lineas)."
+      return 0
+    fi
+    now="$(date +%s)"
+    echo "Esperando muestras JMeter en metrics.log... ($((deadline - now))s restantes)" >&2
+    sleep 3
+  done
+
+  echo "ERROR: Apache JMeter no genero lineas source=simulator tras el smoke." >&2
+  compose logs --tail 160 traffic-simulator || true
+  compose exec -T -e SIM_TOKEN="$tok" traffic-simulator sh -lc \
+    'curl -s -H "X-Simulator-Token: ${SIM_TOKEN}" http://127.0.0.1:8085/status || true' >&2
+  return 1
+}
+
 print_browser_urls() {
   local host
   host="$(public_browser_host)"
@@ -408,7 +448,7 @@ FORCE_MONITORING_ON_LOW_MEM="$(read_env_var FORCE_MONITORING_ON_LOW_MEM "${FORCE
 ALLOW_DEGRADED_STACK="$(read_env_var ALLOW_DEGRADED_STACK "${ALLOW_DEGRADED_STACK:-0}")"
 SKIP_SECRET_STRICT_CHECK="$(read_env_var SKIP_SECRET_STRICT_CHECK "${SKIP_SECRET_STRICT_CHECK:-0}")"
 MIN_MONITORING_MEM_MB="$(read_env_var MIN_MONITORING_MEM_MB "${MIN_MONITORING_MEM_MB:-3200}")"
-MIN_TRAFFIC_STACK_MEM_MB="$(read_env_var MIN_TRAFFIC_STACK_MEM_MB "${MIN_TRAFFIC_STACK_MEM_MB:-3600}")"
+MIN_TRAFFIC_STACK_MEM_MB="$(read_env_var MIN_TRAFFIC_STACK_MEM_MB "${MIN_TRAFFIC_STACK_MEM_MB:-4200}")"
 MIN_FREE_DISK_MB="$(read_env_var MIN_FREE_DISK_MB "${MIN_FREE_DISK_MB:-2048}")"
 
 if [[ "$DEPLOY_MONITORING" == "1" ]] && ! profiles_contain monitoring; then
@@ -504,6 +544,7 @@ fi
 
 preflight_paths=(
   "database/database.sql"
+  "scripts/run_jmeter_traffic.php"
   "monitoring/prometheus/prometheus.aws.yml"
   "monitoring/prometheus/alerts.yml"
   "monitoring/prometheus/blackbox.yml"
@@ -671,6 +712,7 @@ if [[ "$WANT_TRAFFIC" == "1" ]]; then
   curl -sf "http://127.0.0.1:${TRAFFIC_UI_PORT}/health.php" >/dev/null || { echo "ERROR: traffic-simulator-ui /health.php no responde" >&2; exit 1; }
   echo "OK: traffic-simulator-ui health (localhost:${TRAFFIC_UI_PORT})"
   assert_public_port_bind traffic-simulator-ui 80 "$TRAFFIC_UI_PORT"
+  smoke_jmeter_traffic || exit 1
 fi
 
 print_browser_urls

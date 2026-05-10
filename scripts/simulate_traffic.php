@@ -1,6 +1,6 @@
 <?php
 /**
- * simulate_traffic.php - Traffic Simulator CLI
+ * simulate_traffic.php - Compatibility CLI for the Apache JMeter traffic runner
  *
  * Usage:
  *   php scripts/simulate_traffic.php [--users=N] [--duration=S] [--profile=normal|burst|idle]
@@ -13,20 +13,4 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/traffic_simulator_lib.php';
-
-$options = getopt('', [
-    'users::',
-    'duration::',
-    'profile::',
-    'base-url::',
-    'routes-file::',
-]);
-
-$config = traffic_simulator_resolve_config($options);
-if (isset($config['error'])) {
-    fwrite(STDERR, '[TrafficSim] ' . $config['error'] . "\n");
-    exit(1);
-}
-
-exit(traffic_simulator_run($config));
+require __DIR__ . '/run_jmeter_traffic.php';

@@ -1,6 +1,6 @@
 <?php
 /**
- * HTTP control plane for traffic-simulator container (php -S router).
+ * HTTP control plane for traffic-simulator container (Apache JMeter runner).
  * Endpoints: GET /health (no auth), GET /status, POST /start, POST /stop
  * Header: X-Simulator-Token: <token> (must match SIMULATOR_CONTROL_TOKEN env)
  */
@@ -20,11 +20,13 @@ if (is_readable($bundleLib)) {
     exit;
 }
 
-$bundleSim = __DIR__ . '/scripts/simulate_traffic.php';
-$repoSim   = dirname(__DIR__, 2) . '/scripts/simulate_traffic.php';
-$simulateScript = getenv('SIMULATE_SCRIPT_PATH')
-    ?: (is_readable($bundleSim) ? $bundleSim : $repoSim);
-$pidFile = getenv('SIM_PID_FILE') ?: '/tmp/traffic_simulator_worker.pid';
+$bundleRunner = __DIR__ . '/scripts/run_jmeter_traffic.php';
+$repoRunner   = dirname(__DIR__, 2) . '/scripts/run_jmeter_traffic.php';
+$runnerScript = getenv('SIM_JMETER_RUNNER_PATH')
+    ?: (is_readable($bundleRunner) ? $bundleRunner : $repoRunner);
+$pidFile        = getenv('SIM_PID_FILE') ?: '/tmp/traffic_simulator_worker.pid';
+$jmeterPidFile  = getenv('SIM_JMETER_PID_FILE') ?: '/tmp/traffic_simulator_jmeter.pid';
+$statusFile     = getenv('SIM_STATUS_FILE') ?: '/tmp/traffic_simulator_status.json';
 
 function tc_send_headers(int $code, string $type = 'application/json'): void
 {
@@ -97,6 +99,32 @@ function tc_get_running_pid(string $pidFile): int
     return $pid;
 }
 
+function tc_kill_pid(int $pid): void
+{
+    if ($pid <= 0) {
+        return;
+    }
+    if (PHP_OS_FAMILY === 'Windows') {
+        shell_exec('taskkill /PID ' . $pid . ' /F 2>NUL');
+    } else {
+        shell_exec('kill ' . $pid . ' 2>/dev/null');
+    }
+}
+
+/** @return array<string,mixed>|null */
+function tc_read_json_file(string $path): ?array
+{
+    if (!is_readable($path)) {
+        return null;
+    }
+    $raw = file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : null;
+}
+
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -113,6 +141,7 @@ if ($method === 'GET' && $uri === '/status') {
     $pid = tc_get_running_pid($pidFile);
     $probeDir    = getenv('SIM_LOG_DIR') ?: '/var/www/html/logs';
     $metricsFile = rtrim($probeDir, '/\\') . '/metrics.log';
+    $jmeterStatus = tc_read_json_file($statusFile);
     $lineCount   = 0;
     if (is_readable($metricsFile)) {
         $cnt = 0;
@@ -135,6 +164,8 @@ if ($method === 'GET' && $uri === '/status') {
             'metrics_log_lines'    => $lineCount,
             'metrics_log_readable' => is_readable($metricsFile),
         ],
+        'engine'  => 'apache-jmeter',
+        'jmeter'  => $jmeterStatus,
     ]);
     exit;
 }
@@ -187,11 +218,17 @@ if ($method === 'POST' && $uri === '/start') {
     $routesFile = isset($body['routes_file']) ? (string) $body['routes_file'] : (getenv('SIM_ROUTES_FILE') ?: '');
     $logsDir = getenv('SIM_LOG_DIR') ?: '/var/www/html/logs';
 
+    if (!is_readable($runnerScript)) {
+        tc_send_headers(500);
+        echo json_encode(['ok' => false, 'error' => 'JMeter runner not found']);
+        exit;
+    }
+
     $php = PHP_BINARY;
     $cmd = sprintf(
         '%s %s --users=%d --duration=%d --profile=%s --base-url=%s',
         escapeshellarg($php),
-        escapeshellarg($simulateScript),
+        escapeshellarg($runnerScript),
         $users,
         $duration,
         escapeshellarg((string) $profile),
@@ -207,10 +244,12 @@ if ($method === 'POST' && $uri === '/start') {
         exit;
     }
 
-    $workDir = dirname($simulateScript);
-    // SIM_LOG_DIR applies only to php process; background then echo $!
+    $workDir = dirname($runnerScript);
+    // SIM_* vars apply only to the worker process; background then echo $!
     $full = 'cd ' . escapeshellarg($workDir)
         . ' && SIM_LOG_DIR=' . escapeshellarg($logsDir)
+        . ' SIM_STATUS_FILE=' . escapeshellarg($statusFile)
+        . ' SIM_JMETER_PID_FILE=' . escapeshellarg($jmeterPidFile)
         . ' ' . $cmd . ' > /tmp/traffic_simulator.log 2>&1 & echo $!';
     $newPid = (int) shell_exec($full);
     if ($newPid <= 0) {
@@ -228,6 +267,7 @@ if ($method === 'POST' && $uri === '/start') {
         'duration' => $duration,
         'profile'  => $profile,
         'base_url' => $baseUrl,
+        'engine'   => 'apache-jmeter',
     ]);
     exit;
 }
@@ -243,12 +283,13 @@ if ($method === 'POST' && $uri === '/stop') {
     }
     $pid = (int) file_get_contents($pidFile);
     @unlink($pidFile);
+    $jmeterPid = is_file($jmeterPidFile) ? (int) file_get_contents($jmeterPidFile) : 0;
+    @unlink($jmeterPidFile);
+    if ($jmeterPid > 0) {
+        tc_kill_pid($jmeterPid);
+    }
     if ($pid > 0) {
-        if (PHP_OS_FAMILY === 'Windows') {
-            shell_exec('taskkill /PID ' . $pid . ' /F 2>NUL');
-        } else {
-            shell_exec('kill ' . $pid . ' 2>/dev/null');
-        }
+        tc_kill_pid($pid);
     }
     tc_send_headers(200);
     echo json_encode(['ok' => true, 'message' => 'Stopped']);

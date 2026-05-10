@@ -47,7 +47,7 @@ flowchart LR
 
 | Archivo | Uso |
 |--------|-----|
-| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y simulador de tráfico + UI. Grafana/Prometheus/Alertmanager/UI simulador escuchan en `MONITORING_UI_HOST_BIND=0.0.0.0`; cAdvisor/Telegraf quedan privados en `EXPORTER_HOST_BIND=127.0.0.1`. |
+| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y simulador de tráfico Apache JMeter + UI. Grafana/Prometheus/Alertmanager/UI simulador escuchan en `MONITORING_UI_HOST_BIND=0.0.0.0`; cAdvisor/Telegraf quedan privados en `EXPORTER_HOST_BIND=127.0.0.1`. |
 | [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml) | Config Prometheus alineada con el compose AWS (incluye jobs `telegraf` y `cadvisor`). |
 | [`.env.aws.example`](../.env.aws.example) | Plantilla full stack; copiar a `.env` y **rotar secretos** (o `SKIP_SECRET_STRICT_CHECK=1` solo en laboratorio). |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
@@ -261,7 +261,7 @@ ENV_FILE=.env ./scripts/verify_aws_stack.sh
 docker compose -f docker-compose.aws.yml ps
 ```
 
-La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y simulador de tráfico; Prometheus, Grafana, Alertmanager y la UI del simulador quedan accesibles en navegador por IP pública si el Security Group lo permite. cAdvisor y Telegraf siguen privados. Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
+La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y simulador de tráfico Apache JMeter; Prometheus, Grafana, Alertmanager y la UI del simulador quedan accesibles en navegador por IP pública si el Security Group lo permite. cAdvisor y Telegraf siguen privados. Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
 
 ### Verificación y Grafana (tras Opción A con user data o tras Opción B §5)
 
@@ -274,7 +274,7 @@ curl -sf http://127.0.0.1:9090/-/healthy
 curl -sf http://127.0.0.1:3000/api/health
 curl -sf http://127.0.0.1:9093/-/healthy
 curl -sf http://127.0.0.1:9093/ | grep -qi Alertmanager && echo OK_alertmanager_ui
-# Con perfil traffic (UI, puerto TRAFFIC_SIMULATOR_UI_HOST_PORT):
+# Con perfil traffic (UI + worker JMeter, puerto TRAFFIC_SIMULATOR_UI_HOST_PORT):
 curl -sf http://127.0.0.1:8890/health.php
 ```
 
@@ -317,11 +317,11 @@ chmod +x scripts/deploy_aws_docker.sh
 
 Comportamiento:
 
-- **Preflight**: existencia de ficheros montados (`database/`, `monitoring/`), espacio libre (`MIN_FREE_DISK_MB`, por defecto 2 GiB), memoria RAM+swap vs perfiles (`MIN_MONITORING_MEM_MB`, `MIN_TRAFFIC_STACK_MEM_MB`) — **falla** si no hay recursos salvo `FORCE_MONITORING_ON_LOW_MEM=1` o `ALLOW_DEGRADED_STACK=1` (este último reduce el stack a solo `web`+`mysql`).
+- **Preflight**: existencia de ficheros montados (`database/`, `monitoring/` y runner JMeter), espacio libre (`MIN_FREE_DISK_MB`, por defecto 2 GiB), memoria RAM+swap vs perfiles (`MIN_MONITORING_MEM_MB`, `MIN_TRAFFIC_STACK_MEM_MB`) — **falla** si no hay recursos salvo `FORCE_MONITORING_ON_LOW_MEM=1` o `ALLOW_DEGRADED_STACK=1` (este último reduce el stack a solo `web`+`mysql`).
 - **Secretos**: rechaza placeholders `CAMBIAR_*`, defaults débiles (`rootpassword`, `app_password`, `admin123`) y tokens `changeme` con perfil `traffic`, salvo `SKIP_SECRET_STRICT_CHECK=1`.
 - Si ya existe el servicio `mysql`, intenta **backup** (`mysqldump` comprimido en `backups/`).
 - `docker compose config` (validación), `build`, `pull`, `up -d` (con `--wait` si el cliente lo soporta).
-- Tras el `up`, comprueba que **todos** los servicios del compose están en ejecución (y `healthy` si tienen healthcheck); smoke `GET /`, Prometheus, Grafana, Alertmanager y `/health.php` de la UI de tráfico en loopback cuando los perfiles lo exigen.
+- Tras el `up`, comprueba que **todos** los servicios del compose están en ejecución (y `healthy` si tienen healthcheck); smoke `GET /`, Prometheus, Grafana, Alertmanager, `/health.php` de la UI de tráfico y una ejecución corta de Apache JMeter contra `http://web` cuando los perfiles lo exigen.
 - Al final imprime **`docker ps -a`** (además de `docker compose ps -a`) para una vista global de contenedores en el host.
 
 Variables útiles:
@@ -331,7 +331,9 @@ Variables útiles:
 - `PROJECT_DIR` — raíz del repo si ejecutas desde otro directorio.
 - `DEPLOY_MONITORING=1` — añade el perfil `monitoring` si faltaba en `COMPOSE_PROFILES`.
 - `COMPOSE_PROFILES=monitoring,traffic` — stack completo (por defecto en `.env.aws.example`).
-- `MIN_MONITORING_MEM_MB`, `MIN_TRAFFIC_STACK_MEM_MB`, `MIN_FREE_DISK_MB` — umbrales de preflight (`3200`, `3600` y `2048` MB por defecto).
+- `MIN_MONITORING_MEM_MB`, `MIN_TRAFFIC_STACK_MEM_MB`, `MIN_FREE_DISK_MB` — umbrales de preflight (`3200`, `4200` y `2048` MB por defecto).
+- `JMETER_VERSION`, `SIM_JMETER_HEAP`, `SIM_JMETER_WORK_DIR`, `SIM_JMETER_HTML_REPORT` — versión, tuning y reporte del worker Apache JMeter (`5.6.3`, `-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m`, `/var/www/html/logs/jmeter`, `true` por defecto). La UI del simulador enlaza el dashboard HTML de JMeter al finalizar cada ejecución.
+- `SKIP_TRAFFIC_SMOKE=1` — omite el smoke JMeter del despliegue si necesitas desplegar sin generar tráfico sintético.
 - `FORCE_MONITORING_ON_LOW_MEM=1` — omite el fallo por memoria RAM+swap baja (riesgo de OOM).
 - `ALLOW_DEGRADED_STACK=1` — si la memoria RAM+swap es baja, despliega solo `web`+`mysql` en lugar de fallar.
 - `STACK_VERIFY_TIMEOUT_SEC` — tiempo máximo esperando servicios sanos (por defecto 420).

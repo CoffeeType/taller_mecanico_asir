@@ -94,6 +94,55 @@ function simulator_ui_running_cached(string $base, string $token): array
     return ['running' => !empty($r['data']['running']), 'detail' => $r['data']];
 }
 
+function simulator_ui_url_from_logs_path(string $logsDir, string $path): string
+{
+    $logsReal = realpath($logsDir);
+    $pathReal = realpath($path);
+    if ($logsReal === false || $pathReal === false) {
+        return '';
+    }
+    $logsReal = rtrim(str_replace('\\', '/', $logsReal), '/');
+    $pathReal = str_replace('\\', '/', $pathReal);
+    if ($pathReal !== $logsReal && !str_starts_with($pathReal, $logsReal . '/')) {
+        return '';
+    }
+    $rel = ltrim(substr($pathReal, strlen($logsReal)), '/');
+    return 'logs/' . implode('/', array_map('rawurlencode', explode('/', $rel)));
+}
+
+/** @param array<string,mixed>|null $workerDetail */
+function simulator_ui_jmeter_links(string $logsDir, ?array $workerDetail): array
+{
+    if (!is_array($workerDetail)) {
+        return [];
+    }
+    $jmeter = isset($workerDetail['jmeter']) && is_array($workerDetail['jmeter']) ? $workerDetail['jmeter'] : [];
+    $files  = isset($jmeter['files']) && is_array($jmeter['files']) ? $jmeter['files'] : [];
+    $links  = [
+        'enabled'          => true,
+        'tool'             => $jmeter['tool'] ?? 'apache-jmeter',
+        'report_ready'     => !empty($jmeter['report_ready']),
+        'imported_samples' => $jmeter['imported_samples'] ?? 0,
+    ];
+    if (isset($files['report_dir']) && is_string($files['report_dir'])) {
+        $report = rtrim($files['report_dir'], '/\\') . '/index.html';
+        $url = simulator_ui_url_from_logs_path($logsDir, $report);
+        if ($url !== '') {
+            $links['report_url'] = $url;
+        }
+    }
+    foreach (['results_jtl', 'jmeter_log', 'stdout_log', 'test_jmx'] as $key) {
+        if (isset($files[$key]) && is_string($files[$key])) {
+            $url = simulator_ui_url_from_logs_path($logsDir, $files[$key]);
+            if ($url !== '') {
+                $links[$key . '_url'] = $url;
+            }
+        }
+    }
+
+    return $links;
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
@@ -136,6 +185,7 @@ if ($method === 'GET') {
     $run         = !empty($runningInfo['running']);
     $st          = traffic_simulator_read_log_stats($metricsLog, $responseTimeLog);
     $diag        = simulator_ui_logs_diagnostics($logsDir, $metricsLog);
+    $workerDetail = isset($runningInfo['detail']) && is_array($runningInfo['detail']) ? $runningInfo['detail'] : null;
 
     echo json_encode([
         'running'          => $run,
@@ -146,7 +196,8 @@ if ($method === 'GET') {
             'grafana'    => getenv('GRAFANA_EXTERNAL_URL') ?: '',
         ],
         'diagnostics'      => $diag,
-        'worker_detail'    => $runningInfo['detail'] ?? null,
+        'worker_detail'    => $workerDetail,
+        'jmeter'           => simulator_ui_jmeter_links($logsDir, $workerDetail),
     ]);
 
     exit;

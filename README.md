@@ -48,7 +48,7 @@ taller_mecanico_asir/
 │   └── php-exporter/
 │       └── metrics.php     # Endpoint de métricas PHP
 ├── docker/
-│   ├── traffic-simulator/    # Dockerfile worker + API control HTTP interno
+│   ├── traffic-simulator/    # Worker Apache JMeter + API control HTTP interno
 │   ├── traffic-simulator-ui/ # UI web standalone (Apache+PHP proxy)
 │   ├── init-db.sh          # Script de inicialización BD
 │   └── entrypoint.sh       # Script de entrada Docker
@@ -142,14 +142,8 @@ docker-compose ps
 git clone <url-del-repositorio>
 cd taller_mecanico_asir
 
-# Configurar variables de entorno
-Copy-Item .env.example .env
-
-# Iniciar todos los servicios
-docker-compose up -d
-
-# Verificar que todo está funcionando
-docker-compose ps
+# Arranque automatico: Docker Desktop + app + UI Apache JMeter
+.\scripts\start-jmeter-ui.ps1
 ```
 
 **En Windows (CMD):**
@@ -177,7 +171,7 @@ docker-compose ps
 - 📊 **Endpoint de Métricas PHP:** http://localhost:8081/metrics.php (o el valor de `WEB_PORT` en `.env`)
 - 🗄️ **MySQL (desde host):** localhost:3306
 
-**Nota para Windows:** Asegúrate de que Docker Desktop esté ejecutándose antes de ejecutar los comandos. La primera vez puede tardar varios minutos en descargar las imágenes.
+**Nota para Windows:** `scripts/start-jmeter-ui.ps1` arranca Docker Desktop si no está activo, levanta el perfil `traffic` y abre la UI del simulador JMeter en el navegador. También puedes hacer doble clic en `start-jmeter-ui.bat`.
 
 ### Opción 2: Despliegue en Producción con Dokploy 🛳️
 

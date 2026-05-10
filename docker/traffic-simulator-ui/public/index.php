@@ -20,8 +20,8 @@
 <div class="container py-4">
     <div class="d-flex flex-wrap gap-3 align-items-start mb-4">
         <div class="flex-grow-1">
-            <h1 class="h3 mb-1"><i class="bi bi-activity text-primary"></i> Simulador de tráfico</h1>
-            <p class="text-muted mb-2 small">Instancia aparte del sitio público · control servidor con token · no garantiza ausencia de límites o bloqueos en webs ajenas</p>
+            <h1 class="h3 mb-1"><i class="bi bi-activity text-primary"></i> Simulador de tráfico JMeter</h1>
+            <p class="text-muted mb-2 small">Apache JMeter en instancia aparte del sitio público · control servidor con token · no garantiza ausencia de límites o bloqueos en webs ajenas</p>
             <div id="configError" class="alert alert-warning py-2 d-none small mb-0" role="status"></div>
             <div id="pathHint" class="alert alert-danger py-2 d-none small mb-0 mt-2" role="status"></div>
         </div>
@@ -224,15 +224,19 @@ async function poll() {
             dot.className='sim-status-dot running';
             document.getElementById('statusLabel').textContent='En marcha';
             const wd = data.worker_detail;
-            let sub = 'worker activo';
+            let sub = 'JMeter activo';
             if (wd && wd.logs) {
-                sub = 'worker · metrics.log ' + wd.logs.metrics_log_lines + ' líneas · dir ' + (wd.logs.dir_writable ? 'escribible' : 'no escribible');
+                sub = 'JMeter · metrics.log ' + wd.logs.metrics_log_lines + ' líneas · dir ' + (wd.logs.dir_writable ? 'escribible' : 'no escribible');
+                if (wd.jmeter && wd.jmeter.imported_samples != null) {
+                    sub += ' · muestras JTL ' + wd.jmeter.imported_samples;
+                }
             }
             document.getElementById('statusSub').textContent = sub;
         } else {
             dot.className='sim-status-dot stopped';
             document.getElementById('statusLabel').textContent='Detenido';
-            document.getElementById('statusSub').textContent='Sin simulación';
+            const jm = data.jmeter || {};
+            document.getElementById('statusSub').textContent = jm.imported_samples ? ('Última ejecución JMeter · ' + jm.imported_samples + ' muestras') : 'Sin simulación';
         }
 
         const ph = document.getElementById('pathHint');
@@ -268,23 +272,29 @@ async function poll() {
         }
         const links = document.getElementById('monitorLinks');
         links.innerHTML = '';
+        function addLink(href, label, icon, extraClass) {
+            if (!href) return;
+            const a = document.createElement('a');
+            a.href = href;
+            a.target = '_blank';
+            a.className = 'btn btn-sm ' + (extraClass || 'btn-outline-secondary');
+            a.innerHTML = '<i class="bi ' + icon + '"></i> ' + label;
+            links.appendChild(a);
+        }
         if (data.monitoring) {
             if (data.monitoring.prometheus) {
-                const b = document.createElement('a');
-                b.href = data.monitoring.prometheus;
-                b.target = '_blank';
-                b.className = 'btn btn-outline-secondary btn-sm';
-                b.innerHTML = '<i class="bi bi-graph-up"></i> Prometheus';
-                links.appendChild(b);
+                addLink(data.monitoring.prometheus, 'Prometheus', 'bi-graph-up');
             }
             if (data.monitoring.grafana) {
-                const a = document.createElement('a');
-                a.href = data.monitoring.grafana;
-                a.target = '_blank';
-                a.className = 'btn btn-outline-secondary btn-sm';
-                a.innerHTML = '<i class="bi bi-display"></i> Grafana';
-                links.appendChild(a);
+                addLink(data.monitoring.grafana, 'Grafana', 'bi-display');
             }
+        }
+        if (data.jmeter && data.jmeter.enabled) {
+            if (data.jmeter.report_url && data.jmeter.report_ready) {
+                addLink(data.jmeter.report_url, 'Dashboard JMeter', 'bi-speedometer2', 'btn-outline-primary');
+            }
+            addLink(data.jmeter.results_jtl_url, 'JTL', 'bi-filetype-csv');
+            addLink(data.jmeter.jmeter_log_url, 'jmeter.log', 'bi-file-text');
         }
         const rp = await fetch('api.php?action=log_preview');
         const jp = await rp.json();

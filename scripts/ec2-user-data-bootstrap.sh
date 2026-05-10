@@ -193,12 +193,24 @@ normalize_env_defaults() {
   local file="$1"
   local host prometheus_port grafana_port alertmanager_port traffic_ui_port ses_region smtp_smarthost
   raise_env_min_if_lower "$file" MIN_MONITORING_MEM_MB 3200
-  raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 3600
+  raise_env_min_if_lower "$file" MIN_TRAFFIC_STACK_MEM_MB 4200
   set_env_value "$file" MONITORING_UI_HOST_BIND "0.0.0.0"
   set_env_value "$file" EXPORTER_HOST_BIND "127.0.0.1"
   # cAdvisor GHCR: tag semver sin prefijo v (deploy normaliza si falta).
   if ! grep -qE '^CADVISOR_IMAGE_TAG=' "$file"; then
     set_env_value "$file" CADVISOR_IMAGE_TAG "0.56.2"
+  fi
+  if ! grep -qE '^JMETER_VERSION=' "$file"; then
+    set_env_value "$file" JMETER_VERSION "5.6.3"
+  fi
+  if ! grep -qE '^SIM_JMETER_HEAP=' "$file"; then
+    set_env_value "$file" SIM_JMETER_HEAP "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
+  fi
+  if ! grep -qE '^SIM_JMETER_WORK_DIR=' "$file"; then
+    set_env_value "$file" SIM_JMETER_WORK_DIR "/var/www/html/logs/jmeter"
+  fi
+  if ! grep -qE '^SIM_JMETER_HTML_REPORT=' "$file"; then
+    set_env_value "$file" SIM_JMETER_HTML_REPORT "true"
   fi
   host="$(public_browser_host "$file")"
   prometheus_port="$(read_env_value "$file" PROMETHEUS_HOST_PORT || printf '9090')"

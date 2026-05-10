@@ -110,5 +110,23 @@ $w = traffic_simulator_build_weighted([
 ]);
 t('weighted size', count($w) === 2);
 
+$joined = traffic_simulator_join_paths('/base/', '/ruta');
+t('join base route paths', $joined === '/base/ruta');
+
+$rows = traffic_simulator_jmeter_route_rows([
+    ['path' => '/', 'method' => 'GET', 'weight' => 1],
+], ['min_sleep_ms' => 1, 'max_sleep_ms' => 2, 'error_rate' => 0], '/', 3);
+t('jmeter route rows generated', count($rows) === 3 && ($rows[0]['method'] ?? '') === 'GET');
+
+$jtl = $td . '/results.jtl';
+file_put_contents($jtl, "timeStamp,elapsed,label,responseCode,responseMessage,threadName,dataType,success,failureMessage,bytes,sentBytes,grpThreads,allThreads,URL,Latency,IdleTime,Connect\n");
+file_put_contents($jtl, "1,123,GET /jmeter,200,OK,t,text,true,,1,1,1,1,http://web/jmeter,100,0,10\n", FILE_APPEND);
+file_put_contents($ml, '');
+file_put_contents($rl, '');
+$imported = traffic_simulator_import_jmeter_jtl($jtl, $ml, $rl, 0);
+t('jmeter jtl imported count', $imported === 1);
+t('jmeter jtl metrics line', trim((string) file_get_contents($ml)) === 'GET 200 /jmeter source=simulator');
+t('jmeter jtl response seconds', trim((string) file_get_contents($rl)) === '0.123');
+
 echo empty($fails) ? "PASS: traffic_simulator_lib tests OK.\n" : "FAILURES: " . count($fails) . "\n";
 exit(empty($fails) ? 0 : 1);

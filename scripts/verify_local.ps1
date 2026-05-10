@@ -76,6 +76,7 @@ try {
             "login.php",
             "health.php",
             "index.php",
+            "scripts/run_jmeter_traffic.php",
             "tests/test_traffic_simulator_lib.php"
         )
         $vol = "${RepoRoot}:/var/www/html"

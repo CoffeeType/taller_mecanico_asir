@@ -4,6 +4,7 @@
 
 compose_files=(
     "docker-compose.yml"
+    "docker-compose.aws.yml"
     "docker-compose.coolify.yml"
     "docker-compose.coolify.monitoring.yml"
     "docker-compose.coolify.app.yml"
