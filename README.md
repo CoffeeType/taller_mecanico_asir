@@ -10,7 +10,7 @@ Sistema web completo desarrollado con PHP y MySQL para la gestión de un taller 
 - ✅ **Panel de Administración:** CRUD completo para usuarios, citas y noticias
 - ✅ **Monitorización:** Sistema completo con Prometheus y Grafana (solo con Docker)
 - ✅ **Seguridad:** Protección contra SQL Injection, XSS, validación de sesiones
-- ✅ **Simulador de tráfico (opcional):** carga sintética desde **instancia Docker aparte** (UI aparte tipo Grafana), sin formar parte del panel admin — ver [docs/TRAFFIC_SIMULATOR.md](docs/TRAFFIC_SIMULATOR.md)
+- ✅ **Pruebas de carga con Apache JMeter (opcional):** generación de HTTP real desde contenedores Docker (`traffic-simulator` / UI en puerto publicado), sin formar parte del panel admin — ver [docs/TRAFFIC_SIMULATOR.md](docs/TRAFFIC_SIMULATOR.md)
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -48,8 +48,8 @@ taller_mecanico_asir/
 │   └── php-exporter/
 │       └── metrics.php     # Endpoint de métricas PHP
 ├── docker/
-│   ├── traffic-simulator/    # Worker Apache JMeter + API control HTTP interno
-│   ├── traffic-simulator-ui/ # UI web standalone (Apache+PHP proxy)
+│   ├── traffic-simulator/    # JMeter en CLI + API de control (nombre Docker del perfil `traffic`)
+│   ├── traffic-simulator-ui/ # UI web para lanzar planes JMeter (Apache+PHP)
 │   ├── init-db.sh          # Script de inicialización BD
 │   └── entrypoint.sh       # Script de entrada Docker
 ├── logs/                    # Logs de métricas
@@ -77,7 +77,7 @@ taller_mecanico_asir/
 │   ├── AWS_DOCKER_DEPLOYMENT.md     # Guía de despliegue en AWS (EC2 + Docker + Packer)
 │   ├── MONITORING_SETUP_GUIDE.md    # Guía del sistema de monitorización
 │   ├── GUIA_DESPLIEGUE_LOCAL.md     # Guía despliegue local (XAMPP)
-│   └── TRAFFIC_SIMULATOR.md         # Simulador de tráfico (contenedor opcional / externas)
+│   └── TRAFFIC_SIMULATOR.md         # JMeter: perfil Docker `traffic`, variables y seguridad
 ```
 
 ## Requisitos Previos
@@ -171,7 +171,7 @@ docker-compose ps
 - 📊 **Endpoint de Métricas PHP:** http://localhost:8081/metrics.php (o el valor de `WEB_PORT` en `.env`)
 - 🗄️ **MySQL (desde host):** localhost:3306
 
-**Nota para Windows:** `scripts/start-jmeter-ui.ps1` arranca Docker Desktop si no está activo, levanta el perfil `traffic` y abre la UI del simulador JMeter en el navegador. También puedes hacer doble clic en `start-jmeter-ui.bat`.
+**Nota para Windows:** `scripts/start-jmeter-ui.ps1` arranca Docker Desktop si no está activo, levanta el perfil `traffic` y abre la **UI JMeter** en el navegador. También puedes hacer doble clic en `start-jmeter-ui.bat`.
 
 ### Opción 2: Despliegue en Producción con Dokploy 🛳️
 
@@ -659,7 +659,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 | Servicio | URL | Puerto | Credenciales |
 |----------|-----|--------|--------------|
 | **Aplicación Web** | http://localhost:8081 | 8081 (`WEB_PORT`) | admin / admin123 |
-| **Simulador tráfico (UI standalone)** | http://localhost:8890 | 8890 (`TRAFFIC_SIMULATOR_UI_PORT`; `docker compose --profile traffic`; token `.env`) | — |
+| **UI JMeter (pruebas de carga)** | http://localhost:8890 | 8890 (`TRAFFIC_SIMULATOR_UI_PORT`; `docker compose --profile traffic`; token en `.env`) | — |
 | **Grafana** | http://localhost:3000 | 3000 | admin / admin123 |
 | **Prometheus** | http://localhost:9090 | 9090 | Sin autenticación |
 | **MySQL** | localhost:3306 | 3306 | root / rootpassword |

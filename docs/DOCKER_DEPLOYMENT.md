@@ -192,7 +192,7 @@ docker ps
 - **UI/imagen:** `docker/traffic-simulator-ui/Dockerfile` — Apache + PHP (`api.php` hace proxy con token server-side).
 - **Puertos host:** típicamente **`TRAFFIC_SIMULATOR_UI_PORT` (8890)** → `:80` en la UI; el API de control `--8085` permanece sólo dentro de Docker.
 - **Volumen:** `./logs:/var/www/html/logs` **compartido entre `traffic-simulator`, `traffic-simulator-ui` y `web`**, mismo formato que consume `metrics.php`.
-- **Arranque:** `docker compose --profile traffic up -d`. Variables: `SIMULATOR_CONTROL_TOKEN`, `SIM_BASE_URL`, `SIM_UI_DEFAULT_BASE_URL`, `JMETER_VERSION`, `SIM_JMETER_HEAP`, `SIM_JMETER_HTML_REPORT` (ver [.env.example](../.env.example)). La UI del simulador enlaza el dashboard HTML de JMeter cuando termina una ejecución.
+- **Arranque:** `docker compose --profile traffic up -d`. Variables: `SIMULATOR_CONTROL_TOKEN`, `SIM_BASE_URL`, `SIM_UI_DEFAULT_BASE_URL`, `JMETER_VERSION`, `SIM_JMETER_HEAP`, `SIM_JMETER_HTML_REPORT` (ver [.env.example](../.env.example)). La **UI JMeter** enlaza el dashboard HTML de JMeter cuando termina una ejecución.
 - Documentación: [TRAFFIC_SIMULATOR.md](TRAFFIC_SIMULATOR.md).
 
 ## Comandos Útiles

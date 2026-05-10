@@ -92,12 +92,12 @@ Variables de entorno opcionales:
 
 Prometheus: usa `max(app_users_active)` si varios targets scrapean la misma app (misma BD); **no** `sum()` para evitar duplicar el mismo recuento.
 
-### Simulador de tráfico y línea base HTTP
+### Pruebas de carga (JMeter) y línea base HTTP
 
-Las series `app_http_requests_total{method,status,source}`, `app_http_response_time_*`, etc., se derivan de `logs/metrics.log` y `logs/response_time.log` (volumen `./logs` montado en `web`). La app registra **`source=app`**; el simulador **`source=simulator`**. El endpoint **`api/citas_api.php`** también escribe en los mismos logs vía `register_shutdown_function` para que las reservas cuenten en Prometheus.
+Las series `app_http_requests_total{method,status,source}`, `app_http_response_time_*`, etc., se derivan de `logs/metrics.log` y `logs/response_time.log` (volumen `./logs` montado en `web`). La app registra **`source=app`**; las peticiones generadas por JMeter quedan con **`source=simulator`** (valor histórico en métricas). El endpoint **`api/citas_api.php`** también escribe en los mismos logs vía `register_shutdown_function` para que las reservas cuenten en Prometheus.
 
 - Carga aislada fuera del proceso Apache: perfil Compose `traffic`, servicio worker + UI separada (ver [TRAFFIC_SIMULATOR.md](TRAFFIC_SIMULATOR.md)).
-- Paneles **Simulador:** en el dashboard principal usan `source="simulator"`.
+- Paneles **JMeter / `source=simulator`:** en el dashboard principal filtran `source="simulator"`.
 
 ## 📈 Dashboard Principal
 
@@ -118,10 +118,11 @@ Las series `app_http_requests_total{method,status,source}`, `app_http_response_t
 - **Umbrales**: Amarillo > 1%, Rojo > 5%
 - **Importancia**: Calidad del servicio y experiencia del usuario
 
-#### Simulador de tráfico (paneles 18–20)
-- **Requests/s por método** solo con `source="simulator"`.
-- **Éxitos vs errores** (códigos 2xx–3xx frente a 4xx–5xx) del simulador.
-- **Tasa de error %** del simulador (solo útil con perfil Compose `traffic` y mismo volumen `./logs`).
+#### Pruebas JMeter — paneles 18–20
+
+- **Requests/s por método** solo con `source="simulator"` (tráfico generado por JMeter).
+- **Éxitos vs errores** (códigos 2xx–3xx frente a 4xx–5xx) de ese tráfico.
+- **Tasa de error %** del mismo origen (solo útil con perfil Compose `traffic` y mismo volumen `./logs`).
 
 #### 4. Tiempo de Respuesta (Panel 4)
 - **Métricas**: Percentiles p50, p95, p99 del tiempo de respuesta

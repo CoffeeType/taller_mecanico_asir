@@ -1,5 +1,7 @@
 # Simulador de tráfico con Apache JMeter (instancia separada)
 
+En documentación de producto y en la memoria PFC esta capacidad se describe como **pruebas de carga con Apache JMeter**; en Docker Compose el perfil y los nombres de servicio siguen siendo `traffic` / `traffic-simulator` por compatibilidad con el repositorio.
+
 Genera HTTP real con **Apache JMeter en modo CLI/no-GUI** contra la app PHP (u otra URL HTTPS/HTTP autorizada) y conserva el mismo formato de líneas que consume `metrics.php` (`logs/metrics.log`, `logs/response_time.log`).
 
 JMeter se instala dentro de la imagen `traffic-simulator` durante el build. La imagen usa Java 17 y Apache JMeter `JMETER_VERSION` (por defecto `5.6.3`, versión estable oficial que requiere Java 8+).
@@ -65,7 +67,7 @@ El volumen `./logs` debe ser el mismo entre `traffic-simulator` y `traffic-simul
   - `logs/metrics.log`: `GET 200 /ruta source=simulator`.
   - `logs/response_time.log`: tiempo en segundos.
 - `SIM_JMETER_HEAP` controla la memoria de Java. Para EC2 pequeño se recomienda mantener el valor por defecto; para más carga, sube heap y `TRAFFIC_SIMULATOR_MEM_LIMIT` juntos.
-- Con `SIM_JMETER_HTML_REPORT=true`, JMeter añade un reporte HTML en `html-report`. La UI del simulador lo enlaza como **Dashboard JMeter** cuando la ejecución termina.
+- Con `SIM_JMETER_HTML_REPORT=true`, JMeter añade un reporte HTML en `html-report`. La **UI JMeter** lo enlaza como **Dashboard JMeter** cuando la ejecución termina.
 
 ### Sin el perfil `traffic`
 
@@ -103,17 +105,17 @@ Acciones POST útiles: `probe` (comprueba HTTP contra la URL base antes de carga
 Las series Prometheus se derivan de los logs compartidos (`logs/metrics.log`). Cada línea incluye el origen:
 
 - **App PHP:** `GET 200 source=app` (ver `includes/metrics_logger.php`).
-- **Simulador JMeter:** `GET 200 /ruta source=simulator` (el runner convierte `results.jtl`).
+- **Tráfico JMeter en métricas:** `GET 200 /ruta source=simulator` (el runner convierte `results.jtl`).
 
 El exporter [`monitoring/php-exporter/metrics.php`](monitoring/php-exporter/metrics.php) expone `app_http_requests_total{method,status,source}`. Líneas antiguas sin `source=` se clasifican en el parser como `app` o `simulator` por heurística (presencia de ruta).
 
-En **Grafana**, el dashboard principal incluye filas **Simulador:** con `source="simulator"`. Las consultas sin filtro por `source` siguen sumando todo el tráfico.
+En **Grafana**, el dashboard principal incluye filas que filtran por **`source="simulator"`** (tráfico de JMeter). Las consultas sin filtro por `source` siguen sumando todo el tráfico.
 
-La **UI del simulador** (`api.php`) devuelve `success_requests`, `error_requests`, `recent_success`, `recent_errors` y `recent_window` además de `statuses`.
+La **UI JMeter** (`api.php`) devuelve `success_requests`, `error_requests`, `recent_success`, `recent_errors` y `recent_window` además de `statuses`.
 
 ### Si la simulación “corre” pero la UI y Grafana están vacíos
 
-1. **Mismo volumen de logs**: `traffic-simulator`, `traffic-simulator-ui` y **`web`** deben montar el mismo `./logs:/var/www/html/logs`. Si el contenedor `web` no monta `./logs`, Prometheus (vía `/metrics.php`) no verá las líneas que escribe el simulador.
+1. **Mismo volumen de logs**: `traffic-simulator`, `traffic-simulator-ui` y **`web`** deben montar el mismo `./logs:/var/www/html/logs`. Si el contenedor `web` no monta `./logs`, Prometheus (vía `/metrics.php`) no verá las líneas que escribe JMeter.
 2. **Ruta por defecto en la UI**: la imagen define `SIM_LOG_DIR=/var/www/html/logs`. Si personalizas Compose, no uses rutas tipo `../logs` fuera del árbol de la app.
 3. **Depurar el worker**: `docker compose exec traffic-simulator tail -80 /tmp/traffic_simulator.log` (errores del runner, JMeter o URL base). El endpoint `/status` también devuelve rutas de `results.jtl` y `jmeter.log`.
 4. **Reconstruir `web`** tras cambiar `metrics.php`: `docker compose build web` (el Dockerfile copia el exporter a `/var/www/html/metrics.php`).

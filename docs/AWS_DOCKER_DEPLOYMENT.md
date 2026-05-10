@@ -47,7 +47,7 @@ flowchart LR
 
 | Archivo | Uso |
 |--------|-----|
-| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y simulador de tráfico Apache JMeter + UI. Grafana/Prometheus/Alertmanager/UI simulador escuchan en `MONITORING_UI_HOST_BIND=0.0.0.0`; cAdvisor/Telegraf quedan privados en `EXPORTER_HOST_BIND=127.0.0.1`. |
+| [`docker-compose.aws.yml`](../docker-compose.aws.yml) | Stack producción en EC2: **full** por defecto (`COMPOSE_PROFILES=monitoring,traffic`): app, MySQL, monitorización (Prometheus, Grafana, Alertmanager, exporters, cAdvisor, Telegraf) y **pruebas de carga** (Apache JMeter + UI en el perfil Docker `traffic`). Grafana/Prometheus/Alertmanager/UI JMeter escuchan en `MONITORING_UI_HOST_BIND=0.0.0.0`; cAdvisor/Telegraf quedan privados en `EXPORTER_HOST_BIND=127.0.0.1`. |
 | [`monitoring/prometheus/prometheus.aws.yml`](../monitoring/prometheus/prometheus.aws.yml) | Config Prometheus alineada con el compose AWS (incluye jobs `telegraf` y `cadvisor`). |
 | [`.env.aws.example`](../.env.aws.example) | Plantilla full stack; copiar a `.env` y **rotar secretos** (o `SKIP_SECRET_STRICT_CHECK=1` solo en laboratorio). |
 | [`packer/aws-docker-ami.pkr.hcl`](../packer/aws-docker-ami.pkr.hcl) | Plantilla Packer para AMI Ubuntu + Docker + Compose plugin. |
@@ -90,7 +90,7 @@ Reglas **mínimas** (ajusta IPs):
 | 3000 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Grafana |
 | 9090 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Prometheus |
 | 9093 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | Alertmanager |
-| 8890 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | UI simulador de tráfico |
+| 8890 | Tu IP/CIDR (`MONITORING_SG_CIDR`) | UI web para JMeter (perfil `traffic`) |
 
 **No** abras MySQL ni exporters: **3306**, **8080 (cAdvisor)**, **9273 (Telegraf)**, **9100/9104/9115**. Prometheus y Alertmanager no tienen login fuerte por defecto; el script abre puertos UI de forma automática si tiene IAM/`awscli`, pero debes restringir `MONITORING_SG_CIDR` a tu IP/CIDR cuando sea posible.
 
@@ -101,9 +101,9 @@ Con el `.env.aws.example`, el despliegue deja las UIs accesibles por IP/DNS púb
 - Grafana: `http://IP_PUBLICA:3000`
 - Prometheus: `http://IP_PUBLICA:9090`
 - Alertmanager: `http://IP_PUBLICA:9093`
-- UI simulador de tráfico: `http://IP_PUBLICA:8890`
+- UI JMeter (pruebas de carga): `http://IP_PUBLICA:8890`
 
-`scripts/deploy_aws_docker.sh` imprime estas URLs al final. Si hay permisos IAM, también autoriza reglas del Security Group para `3000`, `9090`, `9093`, `8890` usando `MONITORING_SG_CIDR` (por defecto `0.0.0.0/0` en laboratorio).
+`scripts/deploy_aws_docker.sh` imprime estas URLs al final. Si hay permisos IAM, también autoriza reglas del Security Group para `3000`, `9090`, `9093`, `8890` usando `MONITORING_SG_CIDR` (por defecto `0.0.0.0/0` en laboratorio). El puerto `8890` solo aplica si activas el perfil `traffic` (JMeter + UI).
 
 **URL pública de Alertmanager (UI):** `deploy_aws_docker.sh` y [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh) escriben `ALERTMANAGER_EXTERNAL_URL=http://<host>:<ALERTMANAGER_HOST_PORT>` en `.env`, donde `<host>` es `PUBLIC_ACCESS_HOST` si lo defines, o el **public hostname / public IPv4** de la instancia vía metadata EC2. El contenedor pasa esa URL a Alertmanager como `--web.external-url` (en [`monitoring/alertmanager/alertmanager-entrypoint.sh`](../monitoring/alertmanager/alertmanager-entrypoint.sh)) para que enlaces y rutas de la UI coincidan con el acceso real. Si Alertmanager va detrás de un proxy con prefijo de ruta, define `ALERTMANAGER_ROUTE_PREFIX` (por defecto `/`).
 
@@ -261,7 +261,7 @@ ENV_FILE=.env ./scripts/verify_aws_stack.sh
 docker compose -f docker-compose.aws.yml ps
 ```
 
-La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y simulador de tráfico Apache JMeter; Prometheus, Grafana, Alertmanager y la UI del simulador quedan accesibles en navegador por IP pública si el Security Group lo permite. cAdvisor y Telegraf siguen privados. Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
+La aplicación queda en el puerto configurado (`WEB_HOST_PORT`, por defecto **80**). Con el `.env.aws.example` actual, el stack **full** arranca monitorización y el perfil `traffic` (JMeter + UI); Prometheus, Grafana, Alertmanager y la UI en `:8890` quedan accesibles en navegador por IP pública si el Security Group lo permite. cAdvisor y Telegraf siguen privados. Para un stack mínimo solo app + MySQL, vacía `COMPOSE_PROFILES` y pon `DEPLOY_MONITORING=0`.
 
 ### Verificación y Grafana (tras Opción A con user data o tras Opción B §5)
 
@@ -332,7 +332,7 @@ Variables útiles:
 - `DEPLOY_MONITORING=1` — añade el perfil `monitoring` si faltaba en `COMPOSE_PROFILES`.
 - `COMPOSE_PROFILES=monitoring,traffic` — stack completo (por defecto en `.env.aws.example`).
 - `MIN_MONITORING_MEM_MB`, `MIN_TRAFFIC_STACK_MEM_MB`, `MIN_FREE_DISK_MB` — umbrales de preflight (`3200`, `4200` y `2048` MB por defecto).
-- `JMETER_VERSION`, `SIM_JMETER_HEAP`, `SIM_JMETER_WORK_DIR`, `SIM_JMETER_HTML_REPORT` — versión, tuning y reporte del worker Apache JMeter (`5.6.3`, `-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m`, `/var/www/html/logs/jmeter`, `true` por defecto). La UI del simulador enlaza el dashboard HTML de JMeter al finalizar cada ejecución.
+- `JMETER_VERSION`, `SIM_JMETER_HEAP`, `SIM_JMETER_WORK_DIR`, `SIM_JMETER_HTML_REPORT` — versión, tuning y reporte del worker Apache JMeter (`5.6.3`, `-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m`, `/var/www/html/logs/jmeter`, `true` por defecto). La **UI JMeter** enlaza el dashboard HTML de JMeter al finalizar cada ejecución.
 - `SKIP_TRAFFIC_SMOKE=1` — omite el smoke JMeter del despliegue si necesitas desplegar sin generar tráfico sintético.
 - `FORCE_MONITORING_ON_LOW_MEM=1` — omite el fallo por memoria RAM+swap baja (riesgo de OOM).
 - `ALLOW_DEGRADED_STACK=1` — si la memoria RAM+swap es baja, despliega solo `web`+`mysql` en lugar de fallar.
@@ -439,7 +439,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 
 - Rotar credenciales por defecto de [`.env.example`](../.env.example); nunca subir `.env` real al Git (está en `.gitignore`).
 - Endpoint [`/metrics.php`](../monitoring/php-exporter/metrics.php): tratar como **interno**; en este compose Prometheus scrapea por red Docker; no hace falta publicar métricas al Internet.
-- **Simulador de tráfico** (perfil `traffic` en [`docker-compose.aws.yml`](../docker-compose.aws.yml)): la UI queda en **loopback** por defecto; no recomendado exponer sin firewall. Rota `SIMULATOR_CONTROL_TOKEN`.
+- **Pruebas de carga (perfil `traffic` en [`docker-compose.aws.yml`](../docker-compose.aws.yml)):** la UI JMeter se publica en el puerto configurado (p. ej. `8890`) según `MONITORING_UI_HOST_BIND`. Restringe acceso en el Security Group y rota `SIMULATOR_CONTROL_TOKEN`.
 - El exporter MySQL en [`docker-compose.aws.yml`](../docker-compose.aws.yml) usa **`MYSQL_USER` / `MYSQL_PASSWORD`** alineados con el usuario de aplicación (evita el fallo típico `root` + contraseña de `app_user`).
 
 ## Incidencias frecuentes
@@ -448,7 +448,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 |---------|----------------|
 | 502 / sin respuesta | `docker compose -f docker-compose.aws.yml logs web`; SG permite puerto 80/443. |
 | Prometheus “down” para algún target | `docker compose logs prometheus`; revisar que los nombres de servicio coinciden con `prometheus.aws.yml`. |
-| Grafana inaccesible desde fuera | Es **normal**: solo `127.0.0.1` en el host; usar túnel SSH o reverso seguro. |
+| Grafana inaccesible desde fuera | Con `MONITORING_UI_HOST_BIND=127.0.0.1` es **normal** (solo loopback): usa túnel SSH o proxy. Con `0.0.0.0` (p. ej. `.env.aws.example`) comprueba que el Security Group permita `3000` desde tu IP/CIDR. |
 | `compose build requires buildx 0.17.0 or later` (AL2023) | El RPM `docker` puede traer Buildx antiguo. Instala plugin ≥ 0.17, p. ej. `curl` del release [buildx](https://github.com/docker/buildx/releases) a `/usr/libexec/docker/cli-plugins/docker-buildx` + `chmod +x`; el bootstrap ya fuerza Buildx reciente. Luego `SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh`. |
 | Alertmanager cae al arrancar / Prometheus no levanta | Comprueba montaje en [`docker-compose.aws.yml`](../docker-compose.aws.yml) (`alertmanager.yml` → `/etc/alertmanager/config/alertmanager.yml`) y logs: `docker compose logs alertmanager`. Sin correo configurado debe usarse config noop (entrypoint). |
 | `missing to address in email config` (Alertmanager) | Rellena `ALERT_EMAIL_TO` **y** como mínimo `SMTP_SMARTHOST` y `SMTP_FROM`, o deja correo vacío para modo noop hasta configurar SMTP. |
