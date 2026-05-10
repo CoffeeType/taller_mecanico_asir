@@ -346,7 +346,7 @@ El script **no** hace `source .env` (evita romper contraseñas con `$`, `#`, esp
 El repositorio incluye el workflow [`.github/workflows/deploy-aws.yml`](../.github/workflows/deploy-aws.yml). En cada **push** a la rama `main` (y manualmente con *workflow_dispatch*):
 
 1. Se ejecuta [`scripts/verify-builds.sh`](../scripts/verify-builds.sh) en el runner.
-2. Se conecta por **SSH** a la instancia EC2 y en `/opt/taller_mecanico_asir` ejecuta `git fetch`, `git checkout main`, `git pull --ff-only origin main` y `./scripts/deploy_aws_docker.sh`.
+2. Se conecta por **SSH** a la instancia EC2 y en la ruta del clon (por defecto `/opt/taller_mecanico_asir`, configurable con el secret `AWS_EC2_PROJECT_DIR`) ejecuta `git fetch`, checkout de la rama (`main` por defecto, o `AWS_EC2_GIT_BRANCH`), `git pull --ff-only` y `./scripts/deploy_aws_docker.sh`.
 
 **Secrets** del repositorio en GitHub (*Settings → Secrets and variables → Actions*):
 
@@ -356,13 +356,15 @@ El repositorio incluye el workflow [`.github/workflows/deploy-aws.yml`](../.gith
 | `AWS_EC2_USER` | Usuario SSH (p. ej. `ec2-user` en Amazon Linux). |
 | `AWS_EC2_SSH_KEY` | Clave privada PEM completa (multilínea; pegar tal cual en el secret). |
 | `AWS_EC2_SSH_PORT` | Opcional. Puerto SSH si no es `22`. |
+| `AWS_EC2_PROJECT_DIR` | Opcional. Ruta absoluta del clon en la EC2 (por defecto `/opt/taller_mecanico_asir`). |
+| `AWS_EC2_GIT_BRANCH` | Opcional. Rama a desplegar (por defecto `main`). |
 
 #### Configurar secrets y lanzar el workflow
 
 Opción rápida desde la interfaz de GitHub:
 
 1. Repo en GitHub → **Settings** → **Secrets and variables** → **Actions**.
-2. **New repository secret** para `AWS_EC2_HOST`, `AWS_EC2_USER`, `AWS_EC2_SSH_KEY` y, si aplica, `AWS_EC2_SSH_PORT`.
+2. **New repository secret** para `AWS_EC2_HOST`, `AWS_EC2_USER`, `AWS_EC2_SSH_KEY` y, si aplica, `AWS_EC2_SSH_PORT`, `AWS_EC2_PROJECT_DIR`, `AWS_EC2_GIT_BRANCH`.
 3. En `AWS_EC2_SSH_KEY`, pega el contenido completo del `.pem`, incluidas las líneas `BEGIN` y `END`.
 4. Ve a **Actions** → **Deploy to AWS EC2** → **Run workflow** → rama `main`.
 
