@@ -355,6 +355,53 @@ El repositorio incluye el workflow [`.github/workflows/deploy-aws.yml`](../.gith
 | `AWS_EC2_SSH_KEY` | Clave privada PEM completa (multilínea; pegar tal cual en el secret). |
 | `AWS_EC2_SSH_PORT` | Opcional. Puerto SSH si no es `22`. |
 
+#### Configurar secrets y lanzar el workflow
+
+Opción rápida desde la interfaz de GitHub:
+
+1. Repo en GitHub → **Settings** → **Secrets and variables** → **Actions**.
+2. **New repository secret** para `AWS_EC2_HOST`, `AWS_EC2_USER`, `AWS_EC2_SSH_KEY` y, si aplica, `AWS_EC2_SSH_PORT`.
+3. En `AWS_EC2_SSH_KEY`, pega el contenido completo del `.pem`, incluidas las líneas `BEGIN` y `END`.
+4. Ve a **Actions** → **Deploy to AWS EC2** → **Run workflow** → rama `main`.
+
+Opción reproducible desde terminal con GitHub CLI (`gh`):
+
+```powershell
+# Una vez por equipo, si no hay sesión:
+gh auth login --hostname github.com --git-protocol https --web --scopes repo
+
+# Valores de despliegue (ajusta IP/host, usuario, puerto y ruta del PEM):
+gh secret set AWS_EC2_HOST --repo CoffeeType/taller_mecanico_asir --body "IP_O_HOST_EC2"
+gh secret set AWS_EC2_USER --repo CoffeeType/taller_mecanico_asir --body "ec2-user"
+gh secret set AWS_EC2_SSH_PORT --repo CoffeeType/taller_mecanico_asir --body "22"
+Get-Content -LiteralPath "C:\ruta\a\clave.pem" -Raw | gh secret set AWS_EC2_SSH_KEY --repo CoffeeType/taller_mecanico_asir
+
+# Comprobar que existen por nombre (GitHub no muestra valores):
+gh secret list --repo CoffeeType/taller_mecanico_asir
+```
+
+Antes de lanzar el workflow, valida que el PEM, usuario, puerto e IP realmente conectan con la EC2:
+
+```powershell
+ssh -i "C:\ruta\a\clave.pem" -p 22 -o BatchMode=yes -o ConnectTimeout=10 ec2-user@IP_O_HOST_EC2 "echo ok"
+```
+
+Si devuelve `ok`, lanza el despliegue manual:
+
+```powershell
+gh workflow run deploy-aws.yml --repo CoffeeType/taller_mecanico_asir --ref main
+gh run list --repo CoffeeType/taller_mecanico_asir --workflow deploy-aws.yml --limit 3
+gh run watch <RUN_ID> --repo CoffeeType/taller_mecanico_asir --exit-status
+```
+
+Notas de seguridad y operación:
+
+- No commitees el `.pem`, `.env` reales ni salidas que contengan secretos.
+- Si el PEM se expone fuera de GitHub Secrets o de un almacén seguro, rota el key pair/usuario de despliegue.
+- Si el workflow falla con `missing secret`, revisa los nombres exactos anteriores.
+- Si falla con `Permission denied (publickey)`, revisa `AWS_EC2_USER`, `AWS_EC2_SSH_KEY`, puerto SSH y reglas del Security Group.
+- Si falla en `git pull --ff-only`, entra en la EC2 y resuelve cambios locales en `/opt/taller_mecanico_asir` antes de relanzar.
+
 Requisitos en el servidor: ruta fija `/opt/taller_mecanico_asir` (como en [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh)), acceso `git` al remoto (repo público o credenciales ya configuradas en el host) y que el usuario SSH pueda ejecutar Docker (grupo `docker` o uso de `sudo` si adaptas el workflow). Si hay cambios locales sin commit en la instancia, `git pull --ff-only` fallará hasta resolverlos.
 
 ### Modo anti-colapso / recovery
