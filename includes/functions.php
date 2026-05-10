@@ -13,6 +13,35 @@ function sanitize($data) {
     return htmlspecialchars(stripslashes(trim($data)));
 }
 
+/**
+ * Safe relative path for post-login redirects (no open redirect).
+ * Allows same-site paths like admin/test-alert-email.php or index.php.
+ */
+function safe_redirect_path(?string $raw): ?string {
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    $raw = trim($raw);
+    if ($raw === '') {
+        return null;
+    }
+    $raw = str_replace('\\', '/', $raw);
+    if (str_contains($raw, '..')) {
+        return null;
+    }
+    if (preg_match('#^(https?:)?//#i', $raw)) {
+        return null;
+    }
+    $raw = ltrim($raw, '/');
+    if ($raw === '') {
+        return null;
+    }
+    if (!preg_match('#^[a-zA-Z0-9/_\.-]+$#', $raw)) {
+        return null;
+    }
+    return $raw;
+}
+
 function redirect($url) {
     if (!headers_sent()) {
         header("Location: $url");

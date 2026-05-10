@@ -5,11 +5,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// DEBUG: Log access attempt for diagnosis
-error_log('[DEBUG] test-alert-email.php accessed. Session data: ' . json_encode($_SESSION));
-
 if (!isAdmin()) {
-    error_log('[DEBUG] isAdmin() returned false. User role: ' . ($_SESSION['user_role'] ?? 'not set'));
+    if (!isLoggedIn()) {
+        redirect('../login.php?redirect=' . rawurlencode('admin/test-alert-email.php'));
+    }
+    setFlashMessage('error', 'Esta página solo está disponible para administradores.');
     redirect('../index.php');
 }
 

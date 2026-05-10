@@ -36,6 +36,14 @@ retry() {
   return 1
 }
 
+# Mensajes con marca temporal para seguir avance en /var/log/taller-ec2-bootstrap.log (tail -f).
+bootstrap_msg() {
+  echo ""
+  echo "================================================================"
+  echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] taller-bootstrap: $*"
+  echo "================================================================"
+}
+
 ensure_swap() {
   local size_gb="${SWAP_SIZE_GB:-4}"
   local swap_file="${SWAP_FILE:-/swapfile}"
@@ -268,13 +276,16 @@ DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-latest}"
 DOCKER_BUILDX_VERSION="${DOCKER_BUILDX_VERSION:-v0.19.3}"
 
 # Small EC2 instances can lock up while building/pulling and starting MySQL + monitoring.
+bootstrap_msg "Paso 1/9 — swap y comprobación de memoria (evita OOM durante pull/build)"
 ensure_swap
 
 # AWS ECS / AL2023: “Update the installed packages and package cache” (yum update -y).
+bootstrap_msg "Paso 2/9 — dnf update (paquetes del sistema; puede tardar varios minutos)"
 retry 5 20 dnf update -y
 
 # Extra tooling for this project (not in ECS Docker snippet): Instance Connect + git + httpd fallback.
 # Do not install package `curl`: AL2023 ships curl-minimal (/usr/bin/curl); package `curl` conflicts with it.
+bootstrap_msg "Paso 3/9 — paquetes base (git, httpd, ec2-instance-connect, awscli opcional)"
 retry 5 10 dnf install -y ec2-instance-connect git httpd
 # awscli enables best-effort Security Group automation; deploy continues without it.
 retry 3 10 dnf install -y awscli || true
@@ -282,6 +293,7 @@ retry 3 10 dnf install -y awscli || true
 systemctl disable --now httpd || true
 
 # AWS ECS / AL2023: “Install the most recent Docker Community Edition package” (yum install docker).
+bootstrap_msg "Paso 4/9 — motor Docker (dnf install docker si falta) y arranque del servicio"
 if ! command -v docker >/dev/null 2>&1; then
   retry 5 10 dnf install -y docker
 fi
@@ -294,6 +306,7 @@ systemctl enable --now docker
 sudo usermod -aG docker ec2-user || true
 
 # Docker Compose V2: not in the ECS “install Docker” steps above.
+bootstrap_msg "Paso 5/9 — Docker Compose V2 (plugin RPM o binario desde GitHub)"
 mkdir -p /usr/libexec/docker/cli-plugins
 if ! docker compose version >/dev/null 2>&1; then
   retry 3 10 dnf install -y docker-compose-plugin || true
@@ -312,6 +325,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 # Buildx: `docker compose build` requires buildx >= 0.17 with recent Docker
+bootstrap_msg "Paso 6/9 — Docker Buildx (>= 0.17 para compose build)"
 buildx_meets_minimum() {
   local cur
   cur="$(docker buildx version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
@@ -334,10 +348,12 @@ if ! buildx_meets_minimum; then
 fi
 
 # Verify toolchain before deploy (fail fast with clear log).
+bootstrap_msg "Paso 7/9 — verificación de versiones (docker, compose, buildx)"
 docker version
 docker compose version
 docker buildx version
 
+bootstrap_msg "Paso 8/9 — clonar repositorio (si no existe), .env y reglas de seguridad (SG)"
 install -d -o "${BOOT_USER}" -g "${BOOT_USER}" "${TARGET_DIR}"
 if [[ ! -d "${TARGET_DIR}/.git" ]]; then
   retry 5 20 runuser -u "${BOOT_USER}" -- git clone --depth 1 --branch "${GIT_REF}" "${REPO_URL}" "${TARGET_DIR}"
@@ -354,6 +370,7 @@ authorize_public_ui_ingress "${TARGET_DIR}/.env"
 
 install_resource_guard
 
+bootstrap_msg "Paso 9/9 — despliegue Compose (build/pull/up, smoke tests); ver también salida de deploy_aws_docker.sh"
 cd "${TARGET_DIR}"
 chmod +x scripts/deploy_aws_docker.sh scripts/taller-docker-safe-mode.sh
 
@@ -373,6 +390,9 @@ if ! SKIP_BACKUP=1 ./scripts/deploy_aws_docker.sh; then
   deploy_hook_fail
   exit 1
 fi
+
+bootstrap_msg "Contenedores en el host tras el despliegue (docker ps -a)"
+docker ps -a || true
 
 echo "Bootstrap done. Log: /var/log/taller-ec2-bootstrap.log"
 echo "Note for SSH: user ${BOOT_USER} was added to group docker. Run 'exit' and open a NEW SSH session (or run: newgrp docker) before using docker without sudo."

@@ -8,7 +8,7 @@
              ],
     "timezone":  "",
     "uid":  "taller-mecanico-main",
-    "version":  1,
+    "version":  2,
     "schemaVersion":  39,
     "refresh":  "30s",
     "time":  {
@@ -63,6 +63,68 @@
                                    }
                    },
                    {
+                       "id":  21,
+                       "title":  "Avisos críticos (cantidad)",
+                       "description":  "Cuenta reglas Prometheus en firing con label severity=critical (ver monitoring/prometheus/alerts.yml).",
+                       "type":  "stat",
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  2,
+                                       "x":  7,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "count(ALERTS{alertstate=\"firing\", severity=\"critical\"})",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "decimals":  0,
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             },
+                                                                                             {
+                                                                                                 "color":  "red",
+                                                                                                 "value":  1
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "none"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "value"
+                                   }
+                   },
+                   {
                        "id":  2,
                        "title":  "Tráfico Web en Tiempo Real",
                        "type":  "timeseries",
@@ -70,7 +132,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  0,
-                                       "y":  5
+                                       "y":  9
                                    },
                        "targets":  [
                                        {
@@ -159,7 +221,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  12,
-                                       "y":  5
+                                       "y":  9
                                    },
                        "targets":  [
                                        {
@@ -263,7 +325,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  0,
-                                       "y":  13
+                                       "y":  17
                                    },
                        "targets":  [
                                        {
@@ -376,7 +438,7 @@
                                        "h":  10,
                                        "w":  12,
                                        "x":  12,
-                                       "y":  13
+                                       "y":  17
                                    },
                        "targets":  [
                                        {
@@ -471,7 +533,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  0,
-                                       "y":  37
+                                       "y":  41
                                    },
                        "targets":  [
                                        {
@@ -565,7 +627,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  12,
-                                       "y":  37
+                                       "y":  41
                                    },
                        "targets":  [
                                        {
@@ -678,7 +740,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  0,
-                                       "y":  21
+                                       "y":  25
                                    },
                        "targets":  [
                                        {
@@ -782,7 +844,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  12,
-                                       "y":  21
+                                       "y":  25
                                    },
                        "targets":  [
                                        {
@@ -878,7 +940,7 @@
                                        "h":  4,
                                        "w":  6,
                                        "x":  0,
-                                       "y":  51
+                                       "y":  55
                                    },
                        "targets":  [
                                        {
@@ -937,7 +999,7 @@
                                        "h":  4,
                                        "w":  6,
                                        "x":  6,
-                                       "y":  51
+                                       "y":  55
                                    },
                        "targets":  [
                                        {
@@ -996,7 +1058,7 @@
                                        "h":  4,
                                        "w":  6,
                                        "x":  12,
-                                       "y":  51
+                                       "y":  55
                                    },
                        "targets":  [
                                        {
@@ -1055,7 +1117,7 @@
                                        "h":  4,
                                        "w":  6,
                                        "x":  18,
-                                       "y":  51
+                                       "y":  55
                                    },
                        "targets":  [
                                        {
@@ -1112,8 +1174,8 @@
                        "type":  "stat",
                        "gridPos":  {
                                        "h":  5,
-                                       "w":  7,
-                                       "x":  7,
+                                       "w":  5,
+                                       "x":  9,
                                        "y":  0
                                    },
                        "targets":  [
@@ -1187,7 +1249,7 @@
                                        "h":  6,
                                        "w":  24,
                                        "x":  0,
-                                       "y":  45
+                                       "y":  49
                                    },
                        "targets":  [
                                        {
@@ -1254,7 +1316,7 @@
                                        "h":  8,
                                        "w":  24,
                                        "x":  0,
-                                       "y":  29
+                                       "y":  33
                                    },
                        "targets":  [
                                        {
@@ -1342,23 +1404,27 @@
                    },
                    {
                        "id":  17,
-                       "title":  "Alertas Activas",
+                       "title":  "Avisos críticos — detalle",
+                       "description":  "Filas = alertas en firing con severidad critical. Columnas principales: alerta, componente, severidad.",
                        "type":  "table",
                        "gridPos":  {
                                        "h":  5,
-                                       "w":  10,
-                                       "x":  14,
+                                       "w":  14,
+                                       "x":  10,
                                        "y":  0
                                    },
                        "targets":  [
                                        {
-                                           "expr":  "ALERTS{alertstate=\"firing\"}",
-                                           "legendFormat":  "{{alertname}}",
-                                           "refId":  "A",
                                            "datasource":  {
                                                               "type":  "prometheus",
                                                               "uid":  "prometheus"
-                                                          }
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "ALERTS{alertstate=\"firing\", severity=\"critical\"}",
+                                           "format":  "table",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "refId":  "A"
                                        }
                                    ],
                        "fieldConfig":  {
@@ -1387,56 +1453,19 @@
                                                                            }
                                                         },
                                            "overrides":  [
-                                                             {
-                                                                 "matcher":  {
-                                                                                 "id":  "byName",
-                                                                                 "options":  "Value #A"
-                                                                             },
-                                                                 "properties":  [
-                                                                                    {
-                                                                                        "id":  "custom.displayMode",
-                                                                                        "value":  "color-background"
-                                                                                    },
-                                                                                    {
-                                                                                        "id":  "custom.cellOptions",
-                                                                                        "value":  {
-                                                                                                      "type":  "color-background",
-                                                                                                      "mode":  "basic"
-                                                                                                  }
-                                                                                    },
-                                                                                    {
-                                                                                        "id":  "mappings",
-                                                                                        "value":  [
-                                                                                                      {
-                                                                                                          "options":  {
-                                                                                                                          "0":  "@{text=OK}",
-                                                                                                                          "1":  "@{text=ALERTA}"
-                                                                                                                      },
-                                                                                                          "type":  "value"
-                                                                                                      }
-                                                                                                  ]
-                                                                                    },
-                                                                                    {
-                                                                                        "id":  "thresholds",
-                                                                                        "value":  {
-                                                                                                      "mode":  "absolute",
-                                                                                                      "steps":  [
-                                                                                                                    {
-                                                                                                                        "color":  "green",
-                                                                                                                        "value":  null
-                                                                                                                    },
-                                                                                                                    {
-                                                                                                                        "color":  "red",
-                                                                                                                        "value":  1
-                                                                                                                    }
-                                                                                                                ]
-                                                                                                  }
-                                                                                    }
-                                                                                ]
-                                                             }
+
                                                          ]
                                        },
                        "options":  {
+                                       "cellHeight":  "sm",
+                                       "footer":  {
+                                                      "countRows":  false,
+                                                      "fields":  "",
+                                                      "reducer":  [
+                                                                      "sum"
+                                                                  ],
+                                                      "show":  false
+                                                  },
                                        "showHeader":  true
                                    },
                        "transformations":  [
@@ -1444,13 +1473,75 @@
                                                    "id":  "organize",
                                                    "options":  {
                                                                    "excludeByName":  {
-
+                                                                                         "Time":  true,
+                                                                                         "Value":  true
                                                                                      },
                                                                    "indexByName":  {
 
                                                                                    },
                                                                    "renameByName":  {
-                                                                                        "Value #A":  "Estado"
+                                                                                        "alertname":  "Alerta",
+                                                                                        "alertstate":  "Estado",
+                                                                                        "component":  "Componente",
+                                                                                        "severity":  "Severidad"
+                                                                                    }
+                                                               }
+                                               }
+                                           ]
+                   },
+                   {
+                       "id":  22,
+                       "title":  "Avisos críticos por componente",
+                       "description":  "Recuento instantáneo (firing, severity=critical) agrupado por label component.",
+                       "type":  "table",
+                       "gridPos":  {
+                                       "h":  4,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "count by (component) (ALERTS{alertstate=\"firing\", severity=\"critical\"})",
+                                           "format":  "table",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "custom":  {
+                                                                           "align":  "auto",
+                                                                           "inspect":  false
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "cellHeight":  "sm",
+                                       "footer":  {
+                                                      "show":  false
+                                                  },
+                                       "showHeader":  true
+                                   },
+                       "transformations":  [
+                                               {
+                                                   "id":  "organize",
+                                                   "options":  {
+                                                                   "excludeByName":  {
+                                                                                         "Time":  true
+                                                                                     },
+                                                                   "renameByName":  {
+                                                                                        "component":  "Componente",
+                                                                                        "Value":  "Críticos activos"
                                                                                     }
                                                                }
                                                }
@@ -1468,7 +1559,7 @@
                                    ],
                        "type":  "timeseries",
                        "gridPos":  {
-                                       "y":  55,
+                                       "y":  59,
                                        "w":  12,
                                        "x":  0,
                                        "h":  8
@@ -1487,7 +1578,7 @@
                                                          ]
                                        },
                        "gridPos":  {
-                                       "y":  55,
+                                       "y":  59,
                                        "w":  12,
                                        "x":  12,
                                        "h":  8
@@ -1511,7 +1602,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  0,
-                                       "y":  63
+                                       "y":  67
                                    },
                        "targets":  [
                                        {
@@ -1563,7 +1654,7 @@
                                        "h":  8,
                                        "w":  12,
                                        "x":  12,
-                                       "y":  63
+                                       "y":  67
                                    },
                        "targets":  [
                                        {
@@ -1624,7 +1715,7 @@
                                        "h":  7,
                                        "w":  24,
                                        "x":  0,
-                                       "y":  71
+                                       "y":  75
                                    },
                        "targets":  [
                                        {
@@ -1759,7 +1850,7 @@
                                ],
                       "targetBlank":  true,
                       "title":  "Test Email (Alertas)",
-                      "tooltip":  "Enviar un email de prueba (URL = variable App PHP + /admin/test-alert-email.php). Ajusta App PHP arriba si no es localhost:8081.",
+                      "tooltip":  "Abre el panel admin de prueba de alertas. Debes iniciar sesión como administrador en la app; si no, verás el login y luego esta página.",
                       "type":  "link",
                       "url":  "${taller_app_base}/admin/test-alert-email.php"
                   },

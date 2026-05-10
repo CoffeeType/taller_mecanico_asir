@@ -4,8 +4,16 @@ session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
 
+$redirectAfterLogin = safe_redirect_path($_GET['redirect'] ?? '') ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $rp = safe_redirect_path($_POST['redirect'] ?? '');
+    if ($rp !== null && $rp !== '') {
+        $redirectAfterLogin = $rp;
+    }
+}
+
 if (isLoggedIn()) {
-    redirect('index.php');
+    redirect($redirectAfterLogin !== '' ? $redirectAfterLogin : 'index.php');
 }
 
 require_once 'includes/header.php';
@@ -16,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = sanitize($_POST['usuario'] ?? '');
     $password = $_POST['password'] ?? '';
     $csrf_token = $_POST['csrf_token'] ?? '';
+    $postedRedirect = safe_redirect_path($_POST['redirect'] ?? '') ?? '';
 
     if (!verifyCsrfToken($csrf_token)) {
         $error = "Token de seguridad inválido. Por favor recarga la página.";
@@ -45,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 setFlashMessage('success', "Bienvenido " . $user['usuario']);
-                redirect('index.php');
+                redirect($postedRedirect !== '' ? $postedRedirect : 'index.php');
             } else {
                 $error = "Usuario o contraseña incorrectos.";
             }
@@ -70,6 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <form action="login.php" method="POST">
                     <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                    <?php if ($redirectAfterLogin !== ''): ?>
+                        <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectAfterLogin, ENT_QUOTES, 'UTF-8') ?>">
+                    <?php endif; ?>
                     <div class="mb-3">
                         <label for="usuario" class="form-label">Usuario</label>
                         <input type="text" name="usuario" id="usuario" class="form-control" required autofocus>

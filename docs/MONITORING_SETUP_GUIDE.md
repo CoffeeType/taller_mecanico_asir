@@ -176,8 +176,7 @@ docker-compose up -d alertmanager prometheus
 ### Enviar un email de prueba (desde Grafana)
 
 - En **despliegue AWS** con [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh), el script actualiza en disco los valores por defecto del dashboard **App PHP (URL base)** y **Prometheus (URL base)** según metadata EC2 / `PUBLIC_ACCESS_HOST` y `WEB_HOST_PORT`, para que no tengas que editarlos a mano en Grafana (el fichero se reescribe en `monitoring/grafana/dashboards/`; Grafana los recarga por provisioning).
-- Entra en Grafana → Dashboard **Taller Mecánico - Dashboard Principal** → enlace del menú **Test Email (Alertas)** → `${taller_app_base}/admin/test-alert-email.php`.
-- Requiere iniciar sesión como admin en la aplicación.
+- Entra en Grafana → Dashboard **Taller Mecánico - Dashboard Principal** → enlace **Test Email (Alertas)** → `${taller_app_base}/admin/test-alert-email.php`. Si no tienes sesión como **administrador**, la app te lleva al **login** y después al panel de prueba (ya no se redirige al índice público sin más).
 
 ### Alertmanager: la UI no incluye «enviar email de prueba»
 

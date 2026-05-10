@@ -1,0 +1,55 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aws-ec2
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_EC2_HOST: ${{ secrets.AWS_EC2_HOST }}
+      AWS_EC2_USER: ${{ secrets.AWS_EC2_USER }}
+      AWS_EC2_SSH_PORT: ${{ secrets.AWS_EC2_SSH_PORT }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Docker builds
+        run: |
+          chmod +x ./scripts/verify-builds.sh
+          ./scripts/verify-builds.sh
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.AWS_EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${AWS_EC2_HOST:?missing secret AWS_EC2_HOST}"
+          : "${AWS_EC2_USER:?missing secret AWS_EC2_USER}"
+          : "${SSH_KEY:?missing secret AWS_EC2_SSH_KEY}"
+          PORT="${AWS_EC2_SSH_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$PORT" -H "$AWS_EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Pull and redeploy on EC2
+        run: |
+          set -euo pipefail
+          PORT="${AWS_EC2_SSH_PORT:-22}"
+          REMOTE="${AWS_EC2_USER}@${AWS_EC2_HOST}"
+          ssh -i ~/.ssh/deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "$REMOTE" bash -s << 'REMOTE_EOF'
+          set -euo pipefail
+          cd /opt/taller_mecanico_asir
+          git fetch origin
+          git checkout main
+          git pull --ff-only origin main
+          chmod +x scripts/deploy_aws_docker.sh
+          ./scripts/deploy_aws_docker.sh
+          REMOTE_EOF

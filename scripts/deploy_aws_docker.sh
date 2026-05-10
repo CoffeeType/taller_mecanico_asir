@@ -675,4 +675,7 @@ fi
 
 print_browser_urls
 
+echo "Contenedores Docker en el host (docker ps -a):"
+docker ps -a || true
+
 echo "Deploy completado."

@@ -117,7 +117,7 @@ Con el `.env.aws.example`, el despliegue deja las UIs accesibles por IP/DNS púb
 
 El script replica los pasos oficiales de AWS para instalar Docker en AL2023 ([*Installing Docker on AL2023*](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker)): `dnf update -y`, `dnf install docker`, arranque del servicio y `ec2-user` en el grupo `docker`. Además instala `httpd` como fallback operativo, pero lo deja **parado y deshabilitado** para que no ocupe el puerto `80` que publica Docker (`web`). Los paquetes `docker`/`containerd` están en los repositorios principales de AL2023 ([notas AL2023 / ECS](https://docs.aws.amazon.com/linux/al2023/ug/ecs.html)). **Docker Compose V2** no forma parte de ese snippet de ECS; el bootstrap intenta `docker-compose-plugin` por `dnf` y, si no basta, instala el plugin según [Compose — instalación manual del plugin](https://docs.docker.com/compose/install/linux/#install-the-plugin-manually).
 
-Log del arranque: `/var/log/taller-ec2-bootstrap.log`. Si el bootstrap crea `.env` desde `.env.aws.example` o detecta secretos placeholder, reemplaza automáticamente `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` y `SIMULATOR_CONTROL_TOKEN` con valores aleatorios antes del despliegue. **Tras el primer arranque**, revisa/rota secretos en `.env` según tu política. El despliegue manual **falla** si quedan placeholders `CAMBIAR_*` o token `changeme` con perfil `traffic`, salvo `SKIP_SECRET_STRICT_CHECK=1` en laboratorio.
+Log del arranque: `/var/log/taller-ec2-bootstrap.log`. Para ver el avance en vivo (instalación del sistema, Docker, Compose, Buildx, clon del repo y despliegue), conéctate por SSH o SSM y ejecuta `sudo tail -f /var/log/taller-ec2-bootstrap.log`: el script escribe bloques `taller-bootstrap: Paso X/9 — …` con marca temporal UTC. Al terminar el despliegue, el bootstrap y [`deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh) listan también **`docker ps -a`** para ver todos los contenedores del host. Si el bootstrap crea `.env` desde `.env.aws.example` o detecta secretos placeholder, reemplaza automáticamente `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` y `SIMULATOR_CONTROL_TOKEN` con valores aleatorios antes del despliegue. **Tras el primer arranque**, revisa/rota secretos en `.env` según tu política. El despliegue manual **falla** si quedan placeholders `CAMBIAR_*` o token `changeme` con perfil `traffic`, salvo `SKIP_SECRET_STRICT_CHECK=1` en laboratorio.
 
 El bootstrap usa **reintentos** en `dnf`/`curl`, crea o agranda **swap persistente** (`SWAP_SIZE_GB=4` por defecto), comprueba `docker` / `docker compose` / `docker buildx` tras instalar plugins y, si el despliegue falla, deja en el log un volcado de `docker compose ps -a` y logs de **todos** los servicios del compose. Instala `taller-docker-safe-mode.service` desde [`scripts/taller-docker-safe-mode.sh`](../scripts/taller-docker-safe-mode.sh): **no para contenedores** salvo que en `.env` tengas `ALLOW_DEGRADED_STACK=1` y la instancia tenga poca memoria RAM+swap (modo degradado explícito). Puedes fijar versiones de fallback (si no basta el paquete `docker-compose-plugin` de AL2023) exportando antes del user data: `DOCKER_COMPOSE_VERSION` (por defecto `latest`, descarga el último release de Compose) y `DOCKER_BUILDX_VERSION` (por defecto `v0.19.3`).
 
@@ -322,6 +322,7 @@ Comportamiento:
 - Si ya existe el servicio `mysql`, intenta **backup** (`mysqldump` comprimido en `backups/`).
 - `docker compose config` (validación), `build`, `pull`, `up -d` (con `--wait` si el cliente lo soporta).
 - Tras el `up`, comprueba que **todos** los servicios del compose están en ejecución (y `healthy` si tienen healthcheck); smoke `GET /`, Prometheus, Grafana, Alertmanager y `/health.php` de la UI de tráfico en loopback cuando los perfiles lo exigen.
+- Al final imprime **`docker ps -a`** (además de `docker compose ps -a`) para una vista global de contenedores en el host.
 
 Variables útiles:
 
@@ -337,6 +338,24 @@ Variables útiles:
 - `COMPOSE_BUILD_PARALLEL=1` — build paralelo (no recomendado en instancias pequeñas).
 
 El script **no** hace `source .env` (evita romper contraseñas con `$`, `#`, espacios, etc.): pasa variables a Compose con `--env-file .env` cuando existe. Puertos para las comprobaciones (`WEB_HOST_PORT`, `PROMETHEUS_HOST_PORT`, etc.) se leen del mismo fichero sin evaluarlo como shell.
+
+### Redespliegue automático con GitHub Actions (push a `main`)
+
+El repositorio incluye el workflow [`.github/workflows/deploy-aws.yml`](../.github/workflows/deploy-aws.yml). En cada **push** a la rama `main` (y manualmente con *workflow_dispatch*):
+
+1. Se ejecuta [`scripts/verify-builds.sh`](../scripts/verify-builds.sh) en el runner.
+2. Se conecta por **SSH** a la instancia EC2 y en `/opt/taller_mecanico_asir` ejecuta `git fetch`, `git checkout main`, `git pull --ff-only origin main` y `./scripts/deploy_aws_docker.sh`.
+
+**Secrets** del repositorio en GitHub (*Settings → Secrets and variables → Actions*):
+
+| Secret | Descripción |
+|--------|-------------|
+| `AWS_EC2_HOST` | Hostname o IP pública de la instancia (obligatorio). |
+| `AWS_EC2_USER` | Usuario SSH (p. ej. `ec2-user` en Amazon Linux). |
+| `AWS_EC2_SSH_KEY` | Clave privada PEM completa (multilínea; pegar tal cual en el secret). |
+| `AWS_EC2_SSH_PORT` | Opcional. Puerto SSH si no es `22`. |
+
+Requisitos en el servidor: ruta fija `/opt/taller_mecanico_asir` (como en [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh)), acceso `git` al remoto (repo público o credenciales ya configuradas en el host) y que el usuario SSH pueda ejecutar Docker (grupo `docker` o uso de `sudo` si adaptas el workflow). Si hay cambios locales sin commit en la instancia, `git pull --ff-only` fallará hasta resolverlos.
 
 ### Modo anti-colapso / recovery
 
@@ -390,7 +409,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 
 - **RDS MySQL** (o Aurora compatible MySQL) + cambiar `DB_HOST` / variables según endpoint gestionado (véase alias en [`config/database.php`](../config/database.php)).
 - **Separar monitorización** en otra instancia o servicio gestionado para reducir carga en la app.
-- **CI/CD**: GitHub Actions que SSH/rsync o CodeDeploy al servidor, ejecutando `deploy_aws_docker.sh` con secretos en el runner o en AWS.
+- **CI/CD**: el workflow [`.github/workflows/deploy-aws.yml`](../.github/workflows/deploy-aws.yml) redespliega por SSH al hacer push a `main`; alternativas: CodeDeploy, SSM Run Command o runner self-hosted en la VPC.
 
 ## Referencias cruzadas
 
