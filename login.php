@@ -37,12 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $stmt->fetch();
 
             if ($user && password_verify($password, $user['password'])) {
-                // Login Success
+                // Inicio de sesión correcto
                 $_SESSION['user_id'] = $user['idUser'];
                 $_SESSION['username'] = $user['usuario'];
                 $_SESSION['user_role'] = $user['rol'];
                 
-                // Regenerate session ID and CSRF token for security
+                // Regenerar ID de sesión y token CSRF por seguridad
                 session_regenerate_id(true);
                 $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 

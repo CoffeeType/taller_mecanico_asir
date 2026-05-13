@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $nombreImagen = sanitizarNombreArchivo($imagen['name']);
                 $rutaImagen = 'assets/images/' . $nombreImagen;
                 
-                // Ensure directory exists
+                // Asegurar que el directorio existe
                 $uploadDir = dirname($rutaImagen);
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0755, true);
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $nombreImagen = sanitizarNombreArchivo($imagen['name']);
                         $rutaImagen = 'assets/images/' . $nombreImagen;
                         
-                        // Ensure directory exists
+                        // Asegurar que el directorio existe
                         $uploadDir = dirname($rutaImagen);
                         if (!is_dir($uploadDir)) {
                             mkdir($uploadDir, 0755, true);
@@ -138,10 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                // Update database
+                // Actualizar base de datos
                 if (empty($errores)) {
                     if ($rutaImagen !== null) {
-                        // Update with new image
+                        // Actualizar con imagen nueva
                         $stmt = $pdo->prepare("
                             UPDATE noticias 
                             SET titulo = ?, imagen = ?, texto = ?, fecha = ?

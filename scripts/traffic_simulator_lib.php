@@ -1,11 +1,11 @@
 <?php
 /**
- * traffic_simulator_lib.php - Shared logic for traffic simulation (CLI + tests).
+ * traffic_simulator_lib.php — Lógica compartida para simulación de tráfico (CLI y pruebas).
  */
 
 declare(strict_types=1);
 
-/** Default pages for taller mecánico app (path, method, weight). */
+/** Páginas por defecto de la app del taller mecánico (ruta, método, peso). */
 function traffic_simulator_default_pages(): array
 {
     return [
@@ -30,9 +30,9 @@ function traffic_simulator_profile_config(): array
 }
 
 /**
- * If user omits scheme, infer http for Docker/lab hosts and https for typical public URLs.
+ * Si falta el esquema (http/https), inferir http para hosts Docker/lab y https para URLs públicas típicas.
  *
- * Call before parse_url / validation.
+ * Llamar antes de parse_url / validación.
  */
 function traffic_simulator_infer_scheme_for_schemeless_url(string $bare): string
 {
@@ -62,7 +62,7 @@ function traffic_simulator_infer_scheme_for_schemeless_url(string $bare): string
 }
 
 /**
- * True when a scheme-less URL is likely intentional (omit https:// deliberately).
+ * Verdadero si una URL sin esquema parece intencional (omitir https:// a propósito).
  */
 function traffic_simulator_schemeless_looks_intentional(string $bare): bool
 {
@@ -96,7 +96,7 @@ function traffic_simulator_schemeless_looks_intentional(string $bare): bool
 }
 
 /**
- * Add http:// or https:// when missing (common UX: "example.com" only).
+ * Añadir http:// o https:// cuando falten (UX habitual: solo «ejemplo.com»).
  */
 function traffic_simulator_normalize_base_url_input(string $url): string
 {
@@ -139,7 +139,7 @@ function traffic_simulator_validate_base_url(string $url): array
 }
 
 /**
- * Hostnames/IP treated as lab / Docker internal (no confirmation for external-policy).
+ * Hostnames/IP considerados laboratorio / Docker internos (sin confirmación para política «externa»).
  *
  * @return array<int, string>
  */
@@ -155,7 +155,7 @@ function traffic_simulator_internal_hosts_list(): array
 }
 
 /**
- * Normalize host for comparisons (handles [IPv6] form).
+ * Normalizar host para comparaciones (gestiona forma [IPv6]).
  */
 function traffic_simulator_normalize_host(string $host): string
 {
@@ -167,7 +167,7 @@ function traffic_simulator_normalize_host(string $host): string
 }
 
 /**
- * True when host resolves as literal RFC1918/link-local/metadata etc. blocked unless SIM_ALLOW_PRIVATE_TARGETS=true.
+ * Verdadero si el host es IP literal RFC1918/link-local/metadata etc., bloqueada salvo SIM_ALLOW_PRIVATE_TARGETS=true.
  */
 function traffic_simulator_raw_ip_is_blocked_nonpublic(string $ip): bool
 {
@@ -204,12 +204,12 @@ function traffic_simulator_is_internal_hostname(string $host): bool
 }
 
 /**
- * Extra rules for simulator target (SSR/regressions/abuse mitigation).
+ * Reglas extra para el destino del simulador (SSR, regresiones, mitigación de abuso).
  *
- * Options:
- *   - confirm_external bool — user acknowledged risk for hosts not internal
- *   - trusted_cli bool — CLI / automation: skip mandatory confirmation
- *   - allow_private bool|null — override getenv SIM_ALLOW_PRIVATE_TARGETS
+ * Opciones:
+ *   - confirm_external bool — el usuario acepta riesgo para hosts no internos
+ *   - trusted_cli bool — CLI / automatización: omitir confirmación obligatoria
+ *   - allow_private bool|null — anula getenv SIM_ALLOW_PRIVATE_TARGETS
  *
  * @return array{ok:bool, message?:string, base?:string, code?:string}
  */
@@ -244,7 +244,7 @@ function traffic_simulator_validate_target_url(string $url, array $options = [])
             return $v;
         }
 
-        /** Public numeric IP allowed as external-like (still needs confirmation if policy applies). */
+        /** IP numérica pública permitida como «externa» (sigue pudiendo exigir confirmación según política). */
     }
 
     $externalEnabled = getenv('SIM_EXTERNAL_TARGETS_ENABLED') !== 'false';
@@ -269,13 +269,13 @@ function traffic_simulator_validate_target_url(string $url, array $options = [])
 }
 
 /**
- * Parse one line from logs/metrics.log (app + traffic simulator + legacy).
+ * Analizar una línea de logs/metrics.log (app + simulador + formato antiguo).
  *
- * Formats:
+ * Formatos:
  *   - GET 200 source=app
- *   - GET 200 /path source=simulator
- *   - Legacy app: GET 200
- *   - Legacy simulator: GET 200 /path  (path present → treated as source simulator)
+ *   - GET 200 /ruta source=simulator
+ *   - App antigua: GET 200
+ *   - Simulador antiguo: GET 200 /ruta  (si hay ruta → se trata como simulador)
  *
  * @return array{method:string,status:int,path:?string,source:string}|null
  */
@@ -315,7 +315,7 @@ function traffic_simulator_parse_metrics_log_line(string $line): ?array
 }
 
 /**
- * Aggregate quick stats from simulator log files (same format as former api/simulate.php).
+ * Agregar estadísticas rápidas desde los logs del simulador (mismo formato que el antiguo api/simulate.php).
  *
  * @return array{
  *   total_requests:int,
@@ -395,7 +395,7 @@ function traffic_simulator_read_log_stats(string $metricsLog, string $responseTi
 }
 
 /**
- * Load pages from JSON file. Expected: [ {"path": "/", "method": "GET", "weight": 10}, ... ]
+ * Cargar páginas desde JSON. Formato esperado: [ {"path": "/", "method": "GET", "weight": 10}, ... ]
  *
  * @return array<int, array{path:string, method:string, weight:int}>|null
  */
@@ -432,7 +432,7 @@ function traffic_simulator_load_pages_from_json(string $path): ?array
 }
 
 /**
- * Build weighted list for random picks.
+ * Construir lista ponderada para sorteos aleatorios.
  *
  * @param array<int, array{path:string, method:string, weight:int}> $pages
  * @return array<int, array{path:string, method:string}>
@@ -479,7 +479,7 @@ function traffic_simulator_xml(string $value): string
 }
 
 /**
- * Build a shuffled route CSV for JMeter from the existing weighted route model.
+ * Generar CSV de rutas barajado para JMeter a partir del modelo ponderado actual.
  *
  * @param array<int, array{path:string, method:string, weight:int}> $pages
  * @return array<int, array{method:string,path:string}>
@@ -701,9 +701,9 @@ function traffic_simulator_jtl_value(array $row, array $header, string $name, ?i
 }
 
 /**
- * Import new JMeter CSV/JTL rows into the legacy logs consumed by metrics.php.
+ * Importar filas nuevas de CSV/JTL de JMeter en los logs antiguos que consume metrics.php.
  *
- * @return int number of imported data rows in the JTL file
+ * @return int número de filas de datos importadas del JTL
  */
 function traffic_simulator_import_jmeter_jtl(
     string $jtlPath,
@@ -767,7 +767,7 @@ function traffic_simulator_import_jmeter_jtl(
 }
 
 /**
- * @param array<string, mixed> $options getopt long options
+ * @param array<string, mixed> $options opciones largas de getopt
  * @return array{
  *   users:int,
  *   duration:int,
@@ -852,7 +852,7 @@ function traffic_simulator_resolve_config(array $options): array
 /**
  * Comprueba que la URL base responde por HTTP (GET a la raíz). No cuenta peticiones en metrics.log.
  *
- * Options: confirm_external, trusted_cli, timeout (seconds), ssl_verify_peer|null
+ * Opciones: confirm_external, trusted_cli, timeout (segundos), ssl_verify_peer|null
  *
  * @return array{ok:bool, reachable:bool, http_code:int, message:string, error?:string}
  */
@@ -1024,7 +1024,7 @@ function traffic_simulator_append_log(
 }
 
 /**
- * Run main loop (used by CLI).
+ * Bucle principal (uso desde CLI).
  *
  * @param array{
  *   users:int,

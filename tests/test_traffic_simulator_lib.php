@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for scripts/traffic_simulator_lib.php (no PHPUnit; exit 0 on pass).
+ * Pruebas unitarias para scripts/traffic_simulator_lib.php (sin PHPUnit; código 0 si todo pasa).
  */
 
 declare(strict_types=1);

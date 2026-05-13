@@ -4,15 +4,14 @@
  * Expone métricas en formato Prometheus
  */
 
-// Set Content-Type header FIRST before any output or includes
+// Cabecera Content-Type antes que cualquier salida o include
 header('Content-Type: text/plain; version=0.0.4');
 
-// Disable error display to prevent HTML output
+// Desactivar salida de errores para no mezclar HTML con Prometheus
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// Create database connection directly using environment variables
-// We don't include database.php to avoid die() calls that output HTML
+// Conexión a BD con variables de entorno (sin database.php: evita die() que imprime HTML)
 $pdo = null;
 $host = getenv('DB_HOST') ?: 'localhost';
 $db   = getenv('DB_NAME') ?: 'trabajo_final_php';
@@ -32,7 +31,7 @@ try {
     );
 } catch (PDOException $e) {
     error_log("Metrics: Failed to connect to database: " . $e->getMessage());
-    // Continue without database connection - metrics will show 0 values
+    // Seguir sin BD: las métricas mostrarán ceros
 }
 
 // Variable para almacenar estado de conexión a BD
@@ -141,10 +140,10 @@ function obtenerMetricasBD($pdo, int $activeWindowMinutes = 15) {
 // Función para obtener la ruta del directorio de logs
 function obtenerDirectorioLogs() {
     $possiblePaths = [
-        __DIR__ . '/logs',                    // Local development (desde monitoring/php-exporter/)
+        __DIR__ . '/logs',                    // Desarrollo local (desde monitoring/php-exporter/)
         __DIR__ . '/../logs',                 // Docker (desde /var/www/html/)
-        dirname(__DIR__) . '/logs',           // Alternative path
-        '/var/www/html/logs'                  // Docker absolute path
+        dirname(__DIR__) . '/logs',           // Ruta alternativa
+        '/var/www/html/logs'                  // Ruta absoluta típica en Docker
     ];
     
     foreach ($possiblePaths as $path) {

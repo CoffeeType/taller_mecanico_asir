@@ -15,7 +15,7 @@ require_once '../includes/header.php';
 $errors = [];
 $success = '';
 
-// Handle Actions
+// Gestionar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $csrf_token = $_POST['csrf_token'] ?? '';
@@ -29,10 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $apellidos = sanitize($_POST['apellidos'] ?? '');
         $email = sanitize($_POST['email'] ?? '');
         $rol = sanitize($_POST['rol'] ?? '');
-        // Other fields required by DB but simplified here for admin speed (or defaults)
-        // For strictness, admin should fill everything or we allow nulls. 
-        // Prompt says "Crear nuevos usuarios...", assuming full form or simplified.
-        // Let's assume we need to fill the required fields from users_data
+        // Otros campos exigidos por la BD aquí simplificados para rapidez del admin
+        // En modo estricto el admin debería rellenarlo todo o permitir NULL.
+        // Formulario «Crear usuarios…»: completo o simplificado según diseño.
+        // Aquí se cumplen los obligatorios desde users_data.
         $telefono = sanitize($_POST['telefono'] ?? '');
         $fecha = trim((string) ($_POST['fecha_nacimiento'] ?? ''));
         $password = $_POST['password'] ?? '';
@@ -41,26 +41,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             if ($action === 'create') {
-                // Check duplicates
-                // ... (omitted for brevity, assume admin knows what they are doing or DB throws error)
+                // Comprobar duplicados
+                // ... (omitido por brevedad; el admin asume riesgo o la BD lanza error)
                 
-                // Insert users_data
+                // Insertar users_data
                 $stmt = $pdo->prepare("INSERT INTO users_data (nombre, apellidos, email, telefono, fecha_de_nacimiento, sexo) VALUES (?, ?, ?, ?, ?, 'Otro')");
                 $stmt->execute([$nombre, $apellidos, $email, $telefono, $fecha]);
                 $newId = $pdo->lastInsertId();
 
-                // Insert users_login
+                // Insertar users_login
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users_login (idUser, usuario, password, rol) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$newId, $username, $hash, $rol]);
 
                 $success = "Usuario creado.";
             } elseif ($action === 'update') {
-                // Update users_data
+                // Actualizar users_data
                 $stmt = $pdo->prepare("UPDATE users_data SET nombre=?, apellidos=?, email=?, telefono=?, fecha_de_nacimiento=? WHERE idUser=?");
                 $stmt->execute([$nombre, $apellidos, $email, $telefono, $fecha, $idUser]);
 
-                // Update users_login (Role only, password if set)
+                // Actualizar users_login (solo rol; contraseña si se indica)
                 $stmt = $pdo->prepare("UPDATE users_login SET rol=? WHERE idUser=?");
                 $stmt->execute([$rol, $idUser]);
 
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $stmt = $pdo->prepare("DELETE FROM users_data WHERE idUser = ?");
-                $stmt->execute([$idUser]); // Cascade deletes login
+                $stmt->execute([$idUser]); // borrado en cascada del login
                 $success = "Usuario eliminado.";
             } catch (PDOException $e) {
                 $errors[] = "Error al eliminar.";
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Users
+// Obtener usuarios
 $stmt = $pdo->query("SELECT d.*, l.usuario, l.rol, l.idLogin FROM users_data d JOIN users_login l ON d.idUser = l.idUser ORDER BY d.idUser DESC");
 $users = $stmt->fetchAll();
 ?>
@@ -171,7 +171,7 @@ $users = $stmt->fetchAll();
     </div>
 </div>
 
-<!-- Users Table -->
+<!-- Tabla de usuarios -->
 <div class="card shadow-sm">
     <div class="card-header bg-light">
         <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Listado de Usuarios</h5>
@@ -223,7 +223,7 @@ function editUser(u) {
     document.getElementById('formAction').value = 'update';
     document.getElementById('formIdUser').value = u.idUser;
     document.getElementById('f_usuario').value = u.usuario;
-    // Password left empty intentionally
+    // Contraseña vacía a propósito al cargar edición
     document.getElementById('f_rol').value = u.rol;
     document.getElementById('f_nombre').value = u.nombre;
     document.getElementById('f_apellidos').value = u.apellidos;

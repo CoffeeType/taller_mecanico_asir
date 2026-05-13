@@ -24,13 +24,13 @@ function addStatus($message, $type = 'info') {
         </div>
         <div class="card-body">
             
-            <!-- 1. Configuration File -->
+            <!-- 1. Archivo de configuración -->
             <h5 class="border-bottom pb-2">1. Archivo de Configuración</h5>
             <?php if (file_exists($config_file)): ?>
                 <div class="alert alert-success py-2">✅ Encontrado: <?= $config_file ?></div>
                 
                 <?php
-                // Try to read config manually to check vars without including (avoiding immediate die)
+                // Leer config sin include para inspeccionar variables (evitar die() inmediato)
                 $content = file_get_contents($config_file);
                 if (strpos($content, '$host =') !== false && strpos($content, '$db   =') !== false) {
                     echo "<div class='alert alert-success py-2'>✅ Variables de configuración detectadas.</div>";
@@ -42,19 +42,12 @@ function addStatus($message, $type = 'info') {
                 <div class="alert alert-danger py-2">❌ No encontrado: <?= $config_file ?></div>
             <?php endif; ?>
 
-            <!-- 2. Database Connection -->
+            <!-- 2. Conexión a base de datos -->
             <h5 class="border-bottom pb-2 mt-4">2. Conexión a Base de Datos</h5>
             <?php
             $pdo = null;
             if (file_exists($config_file)) {
-                // We define variables locally to avoid including the file if it has the die() logic we just added
-                // but actually we want to test THAT logic or duplicate it.
-                // Let's try to parse the file simply or just require it inside a try block is hard if it has die()
-                // So we will try to connect manually using what we assume are defaults or regex read them
-                
-                // Let's just try to include it. If it dies, the user sees the styled error from db.php which is technically a success for "testing connection"
-                // But to make this script useful even on failure, we should try to replicate the connection logic here safely.
-                
+                // Intentar conectar sin incluir db.php tal cual (puede tener die()); aquí se replica la lógica de forma segura
                 if (file_exists(__DIR__ . '/../config/env.php')) {
                     $env = require __DIR__ . '/../config/env.php';
                     $host = $env['DB_HOST'] ?? 'localhost';
@@ -64,12 +57,12 @@ function addStatus($message, $type = 'info') {
                     
                     echo "<p>Cargando configuración desde <code>env.php</code>...</p>";
                 } else {
-                    // Fallback regex (though unlikely if file uses require)
+                    // Reserva por regex (legado; poco probable si el archivo usa require)
                     $host = 'localhost';
                     $db   = 'trabajo_final_php';
                     $user = 'root';
                     $pass = ''; 
-                    // Regex ... (legacy)
+                    // Extraer host/db del contenido si aplica (legado)
                     if (preg_match('/\$host\s*=\s*[\'"](.*?)[\'"];/', $content, $m)) $host = $m[1];
                     if (preg_match('/\$db\s*=\s*[\'"](.*?)[\'"];/', $content, $m)) $db = $m[1];
                 }
@@ -87,7 +80,7 @@ function addStatus($message, $type = 'info') {
             }
             ?>
 
-            <!-- 3. Tables Check -->
+            <!-- 3. Comprobación de tablas -->
             <?php if ($pdo): ?>
                 <h5 class="border-bottom pb-2 mt-4">3. Verificación de Tablas</h5>
                 <ul class="list-group">
@@ -105,7 +98,7 @@ function addStatus($message, $type = 'info') {
                 </ul>
             <?php endif; ?>
 
-            <!-- 4. Uploads Directory -->
+            <!-- 4. Directorio de subidas -->
             <h5 class="border-bottom pb-2 mt-4">4. Directorio de Subidas</h5>
             <?php
             $upload_dir = __DIR__ . '/../uploads';

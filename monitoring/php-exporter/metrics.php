@@ -4,10 +4,10 @@
  * Expone métricas en formato Prometheus
  */
 
-// Set Content-Type header FIRST before any output or includes
+// Cabecera Content-Type antes que cualquier salida o include
 header('Content-Type: text/plain; version=0.0.4');
 
-// Disable error display to prevent HTML output
+// Desactivar salida de errores para no mezclar HTML con Prometheus
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -20,20 +20,19 @@ if (is_readable($__trafficSimLib)) {
     require_once $__trafficSimLib;
 }
 
-// Create database connection directly using environment variables
-// We don't include database.php to avoid die() calls that output HTML
+// Conexión a BD con variables de entorno (sin database.php: evita die() que imprime HTML)
 $pdo = null;
 
 $runningInContainer = file_exists('/.dockerenv');
 
-// Coolify/managed DB env aliases
+// Alias de entorno Coolify / BD gestionada
 $host = getenv('DB_HOST') ?: (getenv('MYSQL_HOST') ?: ($runningInContainer ? 'mysql' : 'localhost'));
 $port = getenv('DB_PORT') ?: (getenv('MYSQL_PORT') ?: '');
 $db   = getenv('DB_NAME') ?: (getenv('MYSQL_DATABASE') ?: 'trabajo_final_php');
 $user = getenv('DB_USER') ?: (getenv('MYSQL_USER') ?: 'root');
 $pass = getenv('DB_PASS') ?: (getenv('MYSQL_PASSWORD') ?: ($runningInContainer ? 'rootpassword' : ''));
 
-// Support host:port
+// Soporte host:puerto
 if (is_string($host) && strpos($host, ':') !== false && strpos($host, ']') === false) {
     $parts = explode(':', $host);
     if (count($parts) >= 2) {
@@ -59,7 +58,7 @@ try {
     );
 } catch (PDOException $e) {
     error_log("Metrics: Failed to connect to database: " . $e->getMessage());
-    // Continue without database connection - metrics will show 0 values
+    // Seguir sin BD: las métricas mostrarán ceros
 }
 
 // Variable para almacenar estado de conexión a BD
@@ -168,10 +167,10 @@ function obtenerMetricasBD($pdo, int $activeWindowMinutes = 15) {
 // Función para obtener la ruta del directorio de logs
 function obtenerDirectorioLogs() {
     $possiblePaths = [
-        __DIR__ . '/logs',                    // Local development (desde monitoring/php-exporter/)
-        __DIR__ . '/../logs',                 // Docker (desde /var/www/html/)
-        dirname(__DIR__) . '/logs',           // Alternative path
-        '/var/www/html/logs'                  // Docker absolute path
+        __DIR__ . '/logs',                    // Desarrollo local (monitoring/php-exporter/)
+        __DIR__ . '/../logs',                 // Docker (/var/www/html/)
+        dirname(__DIR__) . '/logs',           // Ruta alternativa
+        '/var/www/html/logs'                  // Ruta absoluta típica en Docker
     ];
     
     foreach ($possiblePaths as $path) {

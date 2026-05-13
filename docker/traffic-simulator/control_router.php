@@ -1,8 +1,8 @@
 <?php
 /**
- * HTTP control plane for traffic-simulator container (Apache JMeter runner).
- * Endpoints: GET /health (no auth), GET /status, POST /start, POST /stop
- * Header: X-Simulator-Token: <token> (must match SIMULATOR_CONTROL_TOKEN env)
+ * HTTP control plane del contenedor traffic-simulator (Apache JMeter).
+ * Rutas: GET /health (sin auth), GET /status, POST /start, POST /stop
+ * Cabecera: X-Simulator-Token: <token> (debe coincidir con SIMULATOR_CONTROL_TOKEN)
  */
 
 declare(strict_types=1);
@@ -245,7 +245,7 @@ if ($method === 'POST' && $uri === '/start') {
     }
 
     $workDir = dirname($runnerScript);
-    // SIM_* vars apply only to the worker process; background then echo $!
+    // Variables SIM_* solo para el proceso worker; segundo plano y echo $!
     $full = 'cd ' . escapeshellarg($workDir)
         . ' && SIM_LOG_DIR=' . escapeshellarg($logsDir)
         . ' SIM_STATUS_FILE=' . escapeshellarg($statusFile)

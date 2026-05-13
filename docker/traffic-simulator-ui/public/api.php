@@ -1,6 +1,6 @@
 <?php
 /**
- * JSON API for simulator UI — proxies to traffic-simulator control plane (token server-side).
+ * API JSON para la UI del simulador — proxy al plano de control (token solo en servidor).
  */
 declare(strict_types=1);
 

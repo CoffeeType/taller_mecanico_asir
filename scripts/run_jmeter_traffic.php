@@ -1,9 +1,9 @@
 <?php
 /**
- * run_jmeter_traffic.php - Apache JMeter runner for the traffic-simulator worker.
+ * run_jmeter_traffic.php — Ejecutor Apache JMeter para el worker del traffic-simulator.
  *
- * Generates a JMX plan from the existing simulator config, runs JMeter in CLI mode,
- * and streams JTL results into logs/metrics.log + logs/response_time.log.
+ * Genera un plan JMX desde la config del simulador, ejecuta JMeter en modo CLI
+ * y vuelca resultados JTL en logs/metrics.log + logs/response_time.log.
  */
 
 declare(strict_types=1);

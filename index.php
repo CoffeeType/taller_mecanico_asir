@@ -19,7 +19,7 @@ require_once 'includes/header.php';
     </div>
 </div>
 
-<!-- Trust Signals Section -->
+<!-- Bloque de confianza / señales de credibilidad -->
 <div class="row text-center mb-5 py-4 bg-light rounded mx-1">
     <div class="col-md-3 mb-3 mb-md-0">
         <h2 class="h1 fw-bold text-primary mb-0">15+</h2>
@@ -90,8 +90,8 @@ require_once 'includes/header.php';
     
     <div class="row g-4">
         <?php
-        // Fetch latest 3 tips
-        // Ensure $pdo is available. If included via header it might not be, so checking/requiring just in case.
+        // Obtener los 3 consejos más recientes
+        // Asegurar que $pdo exista (si solo se incluye header a veces no está): recargar BD si hace falta
         if (!isset($pdo)) {
             require_once 'config/database.php';
         }

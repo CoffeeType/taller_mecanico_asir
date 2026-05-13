@@ -21,12 +21,12 @@ $input = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Sanitize and populate input
+    // Sanear y rellenar entrada
     foreach ($input as $key => $value) {
         $input[$key] = sanitize($_POST[$key] ?? '');
     }
 
-    // Validation
+    // Validación básica
     if (empty($input['nombre'])) $errors[] = "El nombre es obligatorio.";
     if (empty($input['apellidos'])) $errors[] = "Los apellidos son obligatorios.";
     if (empty($input['email'])) $errors[] = "El email es obligatorio.";
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($input['usuario'])) $errors[] = "El usuario es obligatorio.";
     if (empty($input['password'])) $errors[] = "La contraseña es obligatoria.";
 
-    // Advanced Validation
+    // Validación avanzada
     if (!filter_var($input['email'], FILTER_VALIDATE_EMAIL)) {
         $errors[] = "El formato del email no es válido.";
     }
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "El código postal debe tener 5 dígitos.";
     }
 
-    // CSRF Check
+    // Comprobación CSRF
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
          $errors[] = "Error de seguridad (Token inválido). Por favor recarga la página.";
     }
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Check if email or user exists
+            // Comprobar si email o usuario ya existen
             $stmt = $pdo->prepare("SELECT idUser FROM users_data WHERE email = ?");
             $stmt->execute([$input['email']]);
             if ($stmt->fetch()) {
@@ -78,8 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("El nombre de usuario ya está en uso.");
             }
 
-            // Insert into users_data
-            // Insert into users_data
+            // Insertar en users_data
             $stmt = $pdo->prepare("
                 INSERT INTO users_data (nombre, apellidos, email, telefono, fecha_de_nacimiento, calle, codigo_postal, ciudad, provincia, sexo)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -91,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $userId = $pdo->lastInsertId();
 
-            // Insert into users_login
+            // Insertar en users_login
             $hashedPassword = password_hash($input['password'], PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("
                 INSERT INTO users_login (idUser, usuario, password, rol)

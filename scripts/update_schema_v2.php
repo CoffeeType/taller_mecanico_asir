@@ -26,7 +26,7 @@ try {
         $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$ddl}");
     };
 
-    // Keep types aligned with database/database.sql
+    // Mantener tipos alineados con database/database.sql
     $addColumn('users_data', 'calle', 'calle VARCHAR(255) NULL');
     $addColumn('users_data', 'codigo_postal', 'codigo_postal VARCHAR(10) NULL');
     $addColumn('users_data', 'ciudad', 'ciudad VARCHAR(100) NULL');

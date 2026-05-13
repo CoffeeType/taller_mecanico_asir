@@ -63,7 +63,7 @@ require_once 'includes/header.php';
                 <?php endif; ?>
 
                 <div class="blog-content fs-5 lh-lg">
-                    <?= $consejo['texto'] // Content is trusted HTML from admin ?>
+                    <?= $consejo['texto'] // HTML de confianza desde administración ?>
                 </div>
             </article>
 
@@ -71,7 +71,7 @@ require_once 'includes/header.php';
                 <h3 class="h4 mb-4">Otros Consejos</h3>
                 <div class="row g-4">
                     <?php
-                    // Fetch recent tips excluding current
+                    // Consejos recientes excluyendo el actual
                     $stmtRecent = $pdo->prepare("SELECT idConsejo, titulo, imagen FROM consejos WHERE idConsejo != ? ORDER BY fecha DESC LIMIT 2");
                     $stmtRecent->execute([$idConsejo]);
                     while($recent = $stmtRecent->fetch()):

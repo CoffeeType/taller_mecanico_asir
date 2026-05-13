@@ -1,6 +1,6 @@
 <?php
-// config/database.php - Unified Database Configuration
-// Supports environment variables, Docker, and local development
+// config/database.php — Configuración unificada de base de datos
+// Variables de entorno, Docker y desarrollo local
 
 function isRunningInContainer(): bool {
     if (file_exists('/.dockerenv')) {
@@ -24,7 +24,7 @@ function envStr(string $key): ?string {
 }
 
 function applyDbEnvAliases(): void {
-    // Coolify / common managed DB envs often use MYSQL_* (or MARIADB_*)
+    // En Coolify y similares suelen usarse MYSQL_* o MARIADB_*
     $aliases = [
         'DB_HOST' => ['MYSQL_HOST', 'MARIADB_HOST'],
         'DB_PORT' => ['MYSQL_PORT', 'MARIADB_PORT'],
@@ -46,7 +46,7 @@ function applyDbEnvAliases(): void {
         }
     }
 
-    // Optional: DATABASE_URL=mysql://user:pass@host:3306/dbname
+    // Opcional: DATABASE_URL=mysql://user:pass@host:3306/nombre_bd
     if (envStr('DB_HOST') === null && envStr('DATABASE_URL') !== null) {
         $url = envStr('DATABASE_URL');
         $parts = @parse_url($url);
@@ -87,7 +87,7 @@ function isLocalhost(string $host): bool {
     $host = trim($host);
     if ($host === '') return false;
 
-    // Strip port for common host:port patterns (avoid touching IPv6 in brackets).
+    // Quitar puerto en patrones host:puerto habituales (no tocar IPv6 entre corchetes)
     if (strpos($host, ':') !== false && strpos($host, ']') === false) {
         $parts = explode(':', $host);
         if (count($parts) >= 2) {
@@ -98,7 +98,7 @@ function isLocalhost(string $host): bool {
     return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
 }
 
-// Load environment variables if .env exists
+// Cargar variables de entorno si existe .env
 if (file_exists(__DIR__ . '/../.env')) {
     $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
@@ -111,7 +111,7 @@ if (file_exists(__DIR__ . '/../.env')) {
                 $value = $matches[1];
             }
 
-            // Don't override already provided environment (e.g. Docker Compose service env)
+            // No sobrescribir entorno ya definido (p. ej. env del servicio en Docker Compose)
             if (getenv($key) === false) {
                 putenv("$key=$value");
                 $_ENV[$key] = $value;
@@ -121,7 +121,7 @@ if (file_exists(__DIR__ . '/../.env')) {
     }
 }
 
-// Normalize DB envs from common aliases (Coolify/managed DBs)
+// Normalizar variables de BD desde alias habituales (Coolify / BD gestionada)
 applyDbEnvAliases();
 
 $deployTarget = strtolower(envStr('DEPLOY_TARGET') ?? '');
@@ -135,14 +135,14 @@ if ($deployTarget === 'infinityfree') {
     $isInfinityfree = true;
 }
 
-// Database configuration with proper fallbacks
+// Configuración de la base de datos con valores por defecto adecuados
 if ($isInfinityfree) {
     $host = envStr('DB_HOST') ?? 'sql208.infinityfree.com';
     $db   = envStr('DB_NAME') ?? 'if0_40685841_trabajo_final_php';
     $user = envStr('DB_USER') ?? 'if0_40685841';
     $pass = envStr('DB_PASS') ?? '';
 } else {
-    // Guardrail: inside containers, `localhost` points to the container itself (not to MySQL service).
+    // Aviso: en contenedores, `localhost` apunta al propio contenedor, no al servicio MySQL
     $configuredHost = envStr('DB_HOST');
     if ($runningInContainer && $configuredHost !== null && isLocalhost($configuredHost)) {
         $replacementHost = envStr('MYSQL_HOST') ?? envStr('MARIADB_HOST') ?? 'mysql';
@@ -152,7 +152,7 @@ if ($isInfinityfree) {
         $_SERVER['DB_HOST'] = $replacementHost;
     }
 
-    // Prefer Docker service name inside containers; localhost for local dev
+    // En contenedores, preferir el nombre del servicio Docker; en local, localhost
     $host = envStr('DB_HOST') ?? ($runningInContainer ? 'mysql' : 'localhost');
     $db   = envStr('DB_NAME') ?? 'trabajo_final_php';
     $user = envStr('DB_USER') ?? 'root';
@@ -161,7 +161,7 @@ if ($isInfinityfree) {
 
 $charset = 'utf8mb4';
 
-// Support host:port (common in local .env) and/or DB_PORT
+// host:puerto (típico en .env local) y/o DB_PORT
 $port = envStr('DB_PORT') ?? '';
 if (strpos($host, ':') !== false && strpos($host, ']') === false) {
     $parts = explode(':', $host);
@@ -175,28 +175,28 @@ if (strpos($host, ':') !== false && strpos($host, ']') === false) {
     }
 }
 
-// Create DSN and options
+// Crear DSN y opciones de PDO
 $dsn = "mysql:host=$host;" . (!empty($port) ? "port=$port;" : "") . "dbname=$db;charset=$charset";
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-    PDO::ATTR_PERSISTENT         => true, // For better performance
+    PDO::ATTR_PERSISTENT         => true, // Mejor rendimiento con conexiones persistentes
 ];
 
-// Global PDO instance
+// Instancia global PDO
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
     
-    // Test connection with a simple query
+    // Comprobar conexión con consulta mínima
     $pdo->query("SELECT 1");
     
 } catch (PDOException $e) {
-    // Log the error for debugging
+    // Registrar el error para depuración
     error_log("Database Connection Error: " . $e->getMessage());
     error_log("DSN: $dsn, User: $user");
 
-    // JSON API clients (e.g. citaciones calendar) must not receive HTML from die()
+    // Clientes API JSON (p. ej. calendario de citas) no deben recibir HTML de die()
     if (defined('TALLER_DB_JSON_EXIT') && TALLER_DB_JSON_EXIT) {
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8', true, 503);
@@ -210,7 +210,7 @@ try {
         die(json_encode($payload, JSON_UNESCAPED_UNICODE));
     }
 
-    // Provide user-friendly error message
+    // Mensaje de error comprensible para el usuario
     $isProduction = ($appEnv === 'production');
     if ($isProduction) {
         die("
@@ -245,10 +245,10 @@ try {
     }
 }
 
-// Optional: Create a function to get the PDO instance for consistency
+// Opcional: función para obtener la instancia PDO (coherencia en el código)
 function getDatabaseConnection() {
     global $pdo;
     return $pdo;
 }
 
-// End of file
+// Fin de archivo

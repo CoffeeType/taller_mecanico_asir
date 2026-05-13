@@ -9,7 +9,7 @@ require_once __DIR__ . '/metrics_logger.php';
 // Iniciar medición del tiempo de respuesta para métricas
 startResponseTimeMeasurement();
 
-// Get current page for active state
+// Obtener página actual para estado «activo» en la navegación
 $current_page = basename($_SERVER['PHP_SELF']);
 $is_admin_dir = strpos($_SERVER['SCRIPT_NAME'], '/admin/') !== false;
 $base_path = $is_admin_dir ? '../' : '';
@@ -33,7 +33,7 @@ $base_path = $is_admin_dir ? '../' : '';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <!-- Custom CSS -->
+    <!-- CSS personalizado -->
     <link rel="stylesheet" href="<?= $base_path ?>css/style.css">
 
 </head>
@@ -50,7 +50,7 @@ $base_path = $is_admin_dir ? '../' : '';
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto">
-                        <!-- Common Pages -->
+                        <!-- Páginas habituales -->
                         <li class="nav-item">
                             <a class="nav-link <?= $current_page == 'index.php' ? 'active' : '' ?>" href="<?= $base_path ?>index.php">Inicio</a>
                         </li>
@@ -61,7 +61,7 @@ $base_path = $is_admin_dir ? '../' : '';
                     <ul class="navbar-nav ms-auto align-items-center">
                         <?php if (isLoggedIn()): ?>
                             <?php if (isAdmin()): ?>
-                                <!-- Admin Sections -->
+                                <!-- Bloque administración -->
                                 <li class="nav-item dropdown">
                                     <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         Administración
@@ -76,7 +76,7 @@ $base_path = $is_admin_dir ? '../' : '';
                                     </ul>
                                 </li>
                             <?php else: ?>
-                                <!-- User Sections -->
+                                <!-- Bloque usuario registrado -->
                                 <li class="nav-item">
                                     <a class="nav-link <?= $current_page == 'citaciones.php' ? 'nav-btn-highlight' : '' ?>" href="<?= $base_path ?>citaciones.php">Mis Citas</a>
                                 </li>
@@ -94,7 +94,7 @@ $base_path = $is_admin_dir ? '../' : '';
                                 </ul>
                             </li>
                         <?php else: ?>
-                            <!-- Guest Sections -->
+                            <!-- Bloque invitados -->
                             <li class="nav-item me-2">
                                 <a class="nav-link" href="<?= $base_path ?>login.php">Iniciar Sesión</a>
                             </li>

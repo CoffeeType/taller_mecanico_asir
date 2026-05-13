@@ -1,10 +1,10 @@
 <?php
-// noticias.php - UPDATED to use database again
+// noticias.php — de nuevo con datos desde base de datos
 require_once 'config/database.php';
 require_once 'includes/header.php';
 
 try {
-    // Fetch news with author name from DATABASE
+    // Cargar noticias con autor desde la BD
     $stmt = $pdo->query("
         SELECT n.idNoticia, n.titulo, n.texto, n.fecha, n.imagen, n.enlace, u.nombre, u.apellidos 
         FROM noticias n 
@@ -21,7 +21,7 @@ try {
 <h1 class="mb-4 text-center">Centro de Recursos del Taller</h1>
 <p class="text-center text-muted mb-4">Mantente informado sobre el mundo del motor y aprende a cuidar tu vehículo</p>
 
-<!-- Tabs Navigation -->
+<!-- Navegación por pestañas -->
 <ul class="nav nav-tabs nav-fill mb-4" id="newsTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="noticias-tab" data-bs-toggle="tab" data-bs-target="#noticias" type="button" role="tab">
@@ -35,9 +35,9 @@ try {
     </li>
 </ul>
 
-<!-- Tab Content -->
+<!-- Contenido de pestañas -->
 <div class="tab-content" id="newsTabsContent">
-    <!-- NOTICIAS TAB (Database) -->
+    <!-- Pestaña NOTICIAS (BD) -->
     <div class="tab-pane fade show active" id="noticias" role="tabpanel">
         <?php if (isset($error)): ?>
             <div class="alert alert-danger"><?= $error ?></div>
@@ -84,7 +84,7 @@ try {
         <?php endif; ?>
     </div>
 
-    <!-- CONSEJOS TAB (Database Tips) -->
+    <!-- Pestaña CONSEJOS (BD) -->
     <div class="tab-pane fade" id="consejos" role="tabpanel">
         <div class="row g-4">
         <?php
@@ -95,7 +95,7 @@ try {
             if ($consejos):
                 foreach($consejos as $consejo):
         ?>
-            <!-- Tip Card -->
+            <!-- Tarjeta de consejo -->
             <div class="col-md-6 col-lg-4">
                 <div class="card h-100 shadow-sm border-0 hover-card">
                     <?php if($consejo['imagen']): ?>
@@ -126,7 +126,7 @@ try {
         }
         ?>
 
-            <!-- CTA Card -->
+            <!-- Tarjeta llamada a la acción -->
             <div class="col-md-6 col-lg-4">
                 <div class="card h-100 shadow-sm border-primary">
                     <div class="card-body d-flex flex-column justify-content-center align-items-center text-center p-5">

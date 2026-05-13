@@ -71,6 +71,7 @@ taller_mecanico_asir/
 ├── .env.aws.example         # Variables ejemplo para despliegue AWS (EC2)
 ├── README.md                # Este archivo
 ├── docs/
+│   ├── ESTRUCTURA_Y_HERRAMIENTAS.md # Mapa del repo: carpetas, herramientas y enlaces a guías
 │   ├── GUIA_USUARIO.md              # Guía de usuario completa
 │   ├── STACK_TECNOLOGICO.md         # Stack tecnológico detallado
 │   ├── DOCKER_DEPLOYMENT.md         # Guía de despliegue Docker
@@ -79,6 +80,8 @@ taller_mecanico_asir/
 │   ├── GUIA_DESPLIEGUE_LOCAL.md     # Guía despliegue local (XAMPP)
 │   └── TRAFFIC_SIMULATOR.md         # JMeter: perfil Docker `traffic`, variables y seguridad
 ```
+
+Índice de **estructura del proyecto y herramientas** (Docker, monitorización, JMeter, scripts): [docs/ESTRUCTURA_Y_HERRAMIENTAS.md](docs/ESTRUCTURA_Y_HERRAMIENTAS.md).
 
 ## Requisitos Previos
 

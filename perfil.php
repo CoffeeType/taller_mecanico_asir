@@ -16,7 +16,7 @@ $idUser = $_SESSION['user_id'];
 $errors = [];
 $success = '';
 
-// Fetch current data
+// Obtener datos actuales
 try {
     $stmt = $pdo->prepare("
         SELECT d.*, l.usuario 
@@ -31,7 +31,7 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Sanitize input
+    // Sanear entrada
     $nombre = sanitize($_POST['nombre']);
     $apellidos = sanitize($_POST['apellidos']);
     $email = sanitize($_POST['email']);
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sexo = sanitize($_POST['sexo']);
     $new_password = $_POST['new_password'];
 
-    // Validations (simplified)
+    // Validaciones (simplificadas)
     if (empty($nombre) || empty($apellidos) || empty($email)) {
         $errors[] = "Campos obligatorios faltantes.";
     }
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Update user data
+            // Actualizar datos del usuario
             $stmt = $pdo->prepare("
                 UPDATE users_data 
                 SET nombre = ?, apellidos = ?, email = ?, telefono = ?, fecha_de_nacimiento = ?, direccion = ?, sexo = ? 
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$nombre, $apellidos, $email, $telefono, $fecha_nacimiento, $direccion, $sexo, $idUser]);
 
-            // Update password if provided
+            // Actualizar contraseña si se indica
             if (!empty($new_password)) {
                 $hashed = password_hash($new_password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("UPDATE users_login SET password = ? WHERE idUser = ?");
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
             $success = "Perfil actualizado correctamente.";
             
-            // Refresh data
+            // Refrescar datos en pantalla
             $stmt = $pdo->prepare("SELECT d.*, l.usuario FROM users_data d JOIN users_login l ON d.idUser = l.idUser WHERE d.idUser = ?");
             $stmt->execute([$idUser]);
             $user = $stmt->fetch();

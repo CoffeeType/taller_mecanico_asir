@@ -1,5 +1,5 @@
 <?php
-// admin.php - Dashboard
+// admin/index.php — Panel de administración
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 if (session_status() === PHP_SESSION_NONE) {
@@ -12,7 +12,7 @@ if (!isAdmin()) {
 
 require_once '../includes/header.php';
 
-// Fetch basic stats
+// Obtener estadísticas básicas
 $stats = [
     'users' => $pdo->query("SELECT COUNT(*) FROM users_data")->fetchColumn(),
     'citas' => $pdo->query("SELECT COUNT(*) FROM citas WHERE fecha_cita >= CURDATE()")->fetchColumn(),
@@ -28,7 +28,7 @@ $stats = [
     </div>
 
     <div class="row g-4 mb-4">
-        <!-- Stats Cards -->
+        <!-- Tarjetas de estadísticas -->
         <div class="col-md-6 col-lg-3">
             <div class="card bg-primary text-white h-100 shadow-sm">
                 <div class="card-body">
@@ -98,7 +98,7 @@ $stats = [
         </div>
     </div>
 
-    <!-- Quick Actions -->
+    <!-- Accesos rápidos -->
     <div class="row">
         <div class="col-md-12">
             <div class="card shadow-sm">

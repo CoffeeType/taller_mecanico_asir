@@ -15,7 +15,7 @@ require_once '../includes/header.php';
 $errors = [];
 $success = '';
 
-// Handle Actions
+// Gestionar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $idCita = $_POST['idCita'] ?? null;
@@ -47,9 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch All Appointments
-// We join with users_data to get registered info. 
-// IF idUser IS NULL, we rely on guest_name/guest_email columns.
+// Obtener todas las citas
+// JOIN con users_data para datos de usuarios registrados.
+// Si idUser es NULL, se usan guest_name / guest_email.
 $sql = "
     SELECT c.*, 
            u.nombre as user_nombre, u.apellidos as user_apellidos, u.email as user_email, u.telefono as user_phone
@@ -92,11 +92,11 @@ $citas = $pdo->query($sql)->fetchAll();
                         <?php else: ?>
                             <?php foreach ($citas as $c): ?>
                                 <?php 
-                                    // Determine display data
+                                    // Datos a mostrar en tabla
                                     $isGuest = empty($c['idUser']);
                                     $clientName = $isGuest ? $c['guest_name'] : $c['user_nombre'] . ' ' . $c['user_apellidos'];
                                     $clientEmail = $isGuest ? $c['guest_email'] : $c['user_email'];
-                                    $clientPhone = $isGuest ? $c['guest_phone'] : $c['user_phone']; // assuming users_data has phone
+                                    $clientPhone = $isGuest ? $c['guest_phone'] : $c['user_phone']; // teléfono en users_data
                                     $badge = $isGuest ? '<span class="badge bg-secondary">Invitado</span>' : '<span class="badge bg-success">Registrado</span>';
                                     $isPast = strtotime($c['fecha_cita']) < strtotime(date('Y-m-d'));
                                     $rowClass = $isPast ? 'text-muted bg-light' : '';
@@ -133,7 +133,7 @@ $citas = $pdo->query($sql)->fetchAll();
                                     </td>
                                 </tr>
 
-                                <!-- Edit Modal -->
+                                <!-- Modal de edición -->
                                 <div class="modal fade" id="editModal<?= $c['idCita'] ?>" tabindex="-1">
                                     <div class="modal-dialog">
                                         <div class="modal-content">

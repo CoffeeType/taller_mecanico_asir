@@ -2,6 +2,7 @@
 # Despliegue / actualizacion idempotente en EC2 usando docker-compose.aws.yml
 # Uso (en el servidor): ./scripts/deploy_aws_docker.sh
 # Variables: COMPOSE_FILE (default docker-compose.aws.yml), SKIP_BACKUP=1, PROJECT_DIR
+# Puerto UI JMeter en host: TRAFFIC_SIMULATOR_UI_HOST_PORT (.env.aws); en docker-compose.yml local es TRAFFIC_SIMULATOR_UI_PORT (scripts/start-jmeter-ui.ps1 lee ambos).
 # cAdvisor: el script resuelve CADVISOR_IMAGE_TAG (semver sin v): .env, API GitHub, o pin CADVISOR_IMAGE_TAG_FALLBACK.
 #
 # No hacer `source .env`: contraseñas con $, #, espacios rompen el shell.

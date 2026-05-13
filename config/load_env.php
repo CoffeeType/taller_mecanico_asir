@@ -1,6 +1,6 @@
 <?php
 // config/load_env.php
-// Simple .env loader for local development
+// Carga simple de .env para desarrollo local
 
 function loadEnv($path = __DIR__ . '/../.env') {
     if (!file_exists($path)) {
@@ -10,23 +10,23 @@ function loadEnv($path = __DIR__ . '/../.env') {
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     
     foreach ($lines as $line) {
-        // Skip comments
+        // Omitir comentarios
         if (strpos(trim($line), '#') === 0) {
             continue;
         }
         
-        // Parse key=value
+        // Parsear clave=valor
         if (strpos($line, '=') !== false) {
             list($key, $value) = explode('=', $line, 2);
             $key = trim($key);
             $value = trim($value);
             
-            // Remove quotes if present
+            // Quitar comillas si las hay
             if (preg_match('/^["\'](.*)["\']$/', $value, $matches)) {
                 $value = $matches[1];
             }
             
-            // Set environment variable
+            // Definir variable de entorno
             putenv("$key=$value");
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
@@ -34,5 +34,5 @@ function loadEnv($path = __DIR__ . '/../.env') {
     }
 }
 
-// Load .env file
+// Cargar archivo .env
 loadEnv();

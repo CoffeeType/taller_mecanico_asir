@@ -1,13 +1,13 @@
 <?php
 // includes/rss_parser.php
-// Simple RSS feed parser for motor.es
+// Parser RSS sencillo para motor.es
 
 function fetchMotorNews($limit = 9) {
     $feedUrl = 'https://www.motor.es/feed';
     $cacheFile = __DIR__ . '/../cache/motor_news.json';
-    $cacheTime = 3600; // 1 hour cache
+    $cacheTime = 3600; // caché 1 hora
     
-    // Check if cache exists and is fresh
+    // Comprobar si la caché existe y sigue vigente
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < $cacheTime)) {
         $cached = @file_get_contents($cacheFile);
         $data = json_decode($cached, true);
@@ -16,12 +16,12 @@ function fetchMotorNews($limit = 9) {
         }
     }
     
-    // Fetch RSS feed using cURL (more reliable than file_get_contents)
+    // Obtener el RSS con cURL (más fiable que file_get_contents)
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $feedUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For local dev
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Solo desarrollo local
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     
@@ -33,7 +33,7 @@ function fetchMotorNews($limit = 9) {
         return [];
     }
     
-    // Parse XML
+    // Parsear XML
     $feed = @simplexml_load_string($xml);
     if ($feed === false) {
         return [];
@@ -45,22 +45,22 @@ function fetchMotorNews($limit = 9) {
     foreach ($feed->channel->item as $item) {
         if ($count >= $limit) break;
         
-        // Extract basic data
+        // Extraer datos básicos
         $title = (string) $item->title;
         $link = (string) $item->link;
         $description = (string) $item->description;
         $pubDate = (string) $item->pubDate;
         
-        // Try to get image from media:content or enclosure
+        // Imagen desde media:content o enclosure
         $image = null;
         
-        // Check media:content (common in RSS feeds)
+        // media:content (habitual en RSS)
         $media = $item->children('http://search.yahoo.com/mrss/');
         if (isset($media->content)) {
             $image = (string) $media->content->attributes()->url;
         }
         
-        // Check enclosure tag
+        // Etiqueta enclosure
         if (!$image && isset($item->enclosure)) {
             $encType = (string) $item->enclosure->attributes()->type;
             if (strpos($encType, 'image') !== false) {
@@ -68,7 +68,7 @@ function fetchMotorNews($limit = 9) {
             }
         }
         
-        // Parse description for image if none found
+        // Buscar imagen en la descripción si no hubo otra
         if (!$image) {
             preg_match('/<img[^>]+src="([^"]+)"/i', $description, $matches);
             if (isset($matches[1])) {
@@ -76,7 +76,7 @@ function fetchMotorNews($limit = 9) {
             }
         }
         
-        // Clean description from HTML
+        // Limpiar HTML de la descripción
         $cleanDesc = strip_tags($description);
         $cleanDesc = substr($cleanDesc, 0, 150);
         
@@ -91,13 +91,13 @@ function fetchMotorNews($limit = 9) {
         $count++;
     }
     
-    // Cache results
+    // Guardar en caché
     $cacheDir = dirname($cacheFile);
     if (!is_dir($cacheDir)) {
         mkdir($cacheDir, 0755, true);
     }
     if (file_put_contents($cacheFile, json_encode($articles)) === false) {
-        // Log error but don't fail - caching is optional
+        // Registrar error pero no fallar: la caché es opcional
         error_log("Failed to write cache file: " . $cacheFile);
     }
     

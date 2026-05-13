@@ -1,12 +1,12 @@
 <?php
-// citaciones.php - Unified Booking & History Page
+// citaciones.php — Reservas e historial de citas
 require_once 'config/database.php';
 require_once 'includes/header.php';
 
 $isLoggedIn = isLoggedIn();
 $idUser = $isLoggedIn ? $_SESSION['user_id'] : null;
 
-// --- 1. My Citations Logic (from old citaciones.php) ---
+// --- 1. Lógica «mis citas» (antigua citaciones.php) ---
 $myCitas = [];
 if ($isLoggedIn) {
     try {
@@ -18,16 +18,16 @@ if ($isLoggedIn) {
     }
 }
 
-// --- 2. Calendar Logic (from booking-calendar.php) ---
-// Get current month and year from URL or use current
+// --- 2. Lógica del calendario (antigua booking-calendar.php) ---
+// Mes y año: query o actuales
 $selectedMonth = isset($_GET['month']) ? intval($_GET['month']) : intval(date('n'));
 $selectedYear = isset($_GET['year']) ? intval($_GET['year']) : intval(date('Y'));
 
-// Ensure valid month/year
+// Asegurar mes/año válidos
 if ($selectedMonth < 1 || $selectedMonth > 12) $selectedMonth = intval(date('n'));
 if ($selectedYear < 2020 || $selectedYear > 2030) $selectedYear = intval(date('Y'));
 
-// Fetch booked dates for the current month
+// Fechas ocupadas del mes visible
 $bookedDatesArray = getBookedDates($pdo, $selectedYear, $selectedMonth);
 
 $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
@@ -35,13 +35,13 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 ?>
 
 <div class="container py-4">
-    <!-- Section 1: BOOKING CALENDAR -->
+    <!-- Sección 1: calendario de reserva -->
     <div class="row justify-content-center mb-5">
         <div class="col-lg-12">
             <h1 class="mb-4 text-center">Reserva tu Cita</h1>
             
             <div class="card shadow-sm">
-                <!-- Calendar Header -->
+                <!-- Cabecera del calendario -->
                 <div class="card-header bg-white border-bottom py-3">
                     <div class="month-navigation">
                         <button class="btn btn-sm btn-outline-secondary" onclick="changeMonth(-1)">
@@ -56,10 +56,10 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                     </div>
                 </div>
                 
-                <!-- Calendar Body -->
+                <!-- Cuerpo del calendario -->
                 <div class="card-body p-0">
                     <div class="row g-0">
-                        <!-- Calendar Section -->
+                        <!-- Bloque calendario -->
                         <div class="col-md-7 p-4 border-end">
                             <div class="calendar-header">
                                 <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
@@ -72,13 +72,13 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                                 $daysInMonth = $firstDayOfMonth->format('t');
                                 $daysInPrevMonth = (clone $firstDayOfMonth)->modify('-1 day')->format('d');
                                 
-                                // Prev Month
+                                // Mes anterior (días fantasma)
                                 for ($i = $firstDayWeekday - 1; $i >= 0; $i--) {
                                     $day = $daysInPrevMonth - $i;
                                     echo "<div class='calendar-day outside'>$day</div>";
                                 }
                                 
-                                // Current Month
+                                // Mes actual
                                 for ($day = 1; $day <= $daysInMonth; $day++) {
                                     $dateStr = sprintf("%04d-%02d-%02d", $selectedYear, $selectedMonth, $day);
                                     $isBooked = in_array($dateStr, $bookedDatesArray);
@@ -93,7 +93,7 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                                     echo "<div class='" . implode(' ', $classes) . "' onclick=\"$onclick\" data-date='$dateStr'>$day</div>";
                                 }
                                 
-                                // Next Month
+                                // Mes siguiente (días fantasma)
                                 $totalCells = $firstDayWeekday + $daysInMonth;
                                 $remainingCells = (7 - ($totalCells % 7)) % 7;
                                 for ($day = 1; $day <= $remainingCells; $day++) {
@@ -103,7 +103,7 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                             </div>
                         </div>
                         
-                        <!-- Time Slots Section -->
+                        <!-- Franjas horarias -->
                         <div class="col-md-5 p-4">
                             <div id="time-slot-placeholder" class="text-center text-muted py-5">
                                 <i class="bi bi-calendar-event fs-1 d-block mb-3"></i>
@@ -125,7 +125,7 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                 </div>
             </div>
             
-            <!-- Booking Form -->
+            <!-- Formulario de reserva -->
             <div id="booking-form-section" class="card shadow-sm mt-4" style="display:none;">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-check-circle-fill me-2"></i>Confirmar Reserva: <span id="selected-summary"></span></h5>
@@ -174,7 +174,7 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         </div>
     </div>
 
-    <!-- Section 2: MY CITATIONS (Logged In Only) -->
+    <!-- Sección 2: mis citas (solo usuarios logueados) -->
     <?php if ($isLoggedIn): ?>
     <hr class="my-5">
     <div class="row">
@@ -222,7 +222,7 @@ $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 </div>
 
 <script>
-// JS Logic from booking-calendar.php
+// Lógica JS del calendario (heredada de booking-calendar.php)
 let currentMonth = <?php echo $selectedMonth; ?>;
 let currentYear = <?php echo $selectedYear; ?>;
 let selectedDate = null;

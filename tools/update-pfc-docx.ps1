@@ -109,5 +109,32 @@ $xml = $xml.Replace(
   'Parámetros de JMeter: versión, memoria de Java, directorio de trabajo, verificación TLS y entorno de pruebas controladas.'
 )
 
+# --- Tras Tabla 18 (sección 8.2): dificultades SMTP y CI/CD (solo cuerpo, no índice) ---
+$marker82 = '>8.2. Problemas encontrados</w:t>'
+$ix82 = $xml.IndexOf($marker82)
+if ($ix82 -ge 0 -and $xml.IndexOf('8.2.1. Dificultades técnicas (SMTP externo y CI/CD)') -lt 0) {
+  $tblTitle = 'Tabla 18. Problemas encontrados'
+  $t0 = $xml.IndexOf($tblTitle, $ix82)
+  if ($t0 -ge 0) {
+    $tblOpen = $xml.IndexOf('<w:tbl>', $t0)
+    if ($tblOpen -ge 0) {
+      $tblClose = $xml.IndexOf('</w:tbl>', $tblOpen)
+      if ($tblClose -ge 0) {
+        $insAt = $tblClose + '</w:tbl>'.Length
+        $pRun24 = '<w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial" /><w:sz w:val="24" /><w:szCs w:val="24" /></w:rPr>'
+        $pHead = '<w:p><w:pPr><w:spacing w:after="120" w:before="120" w:line="360" /><w:jc w:val="left" /></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial" /><w:b /><w:bCs /><w:sz w:val="26" /><w:szCs w:val="26" /></w:rPr><w:t xml:space="preserve">8.2.1. Dificultades técnicas (SMTP externo y CI/CD)</w:t></w:r></w:p>'
+        $pPrBoth = '<w:pPr><w:spacing w:after="120" w:before="80" w:line="360" /><w:jc w:val="both" /></w:pPr>'
+        $bodySmtp = 'La integración de notificaciones por correo con un SMTP externo (Alertmanager) presentó fricción operativa: muchos proveedores obligan a STARTTLS en el puerto 587; en Amazon SES las credenciales SMTP no coinciden con las claves de acceso IAM y hace falta verificar remitente y destinatarios mientras la cuenta siga en sandbox. Alertmanager no ofrece un botón de prueba en su interfaz web, por lo que la validación exige disparar una alerta sintética o usar el panel admin de la aplicación cuando el stack está levantado. Si faltan variables obligatorias, el entrypoint puede arrancar en modo noop para no bloquear el despliegue, lo que a veces confunde hasta rellenar ALERT_EMAIL_TO, SMTP_SMARTHOST y SMTP_FROM.'
+        $bodyCi = 'Respecto al CI/CD con GitHub Actions, los workflows de verificación de builds añadían coste de mantenimiento (imágenes base, Buildx en runners, secretos para despliegue) y fallos intermitentes por red o límites de tiempo. El repositorio ha retirado la integración con GitHub Actions; la comprobación de imágenes pasa a hacerse en local con docker compose build según el fichero compose que corresponda al entorno.'
+        $pSmtp = '<w:p>' + $pPrBoth + '<w:r>' + $pRun24 + '<w:t xml:space="preserve">' + $bodySmtp + '</w:t></w:r></w:p>'
+        $pCi = '<w:p>' + $pPrBoth + '<w:r>' + $pRun24 + '<w:t xml:space="preserve">' + $bodyCi + '</w:t></w:r></w:p>'
+        $insert = $pHead + $pSmtp + $pCi
+        $xml = $xml.Insert($insAt, $insert)
+        Write-Host 'Apartado 8.2.1 (SMTP y CI/CD): insertado tras Tabla 18.'
+      }
+    }
+  }
+}
+
 Write-DocXml $docx $xml
 Write-Host "Listo: $docx"

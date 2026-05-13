@@ -1,5 +1,5 @@
 <?php
-// tests/test_booking_access.php — HTTP smoke (api/citas_api.php uses exit() internally)
+// tests/test_booking_access.php — prueba rápida HTTP (api/citas_api.php usa exit() internamente)
 
 $base = rtrim(getenv('BOOKING_TEST_BASE') ?: 'http://127.0.0.1', '/');
 $url = $base . '/api/citas_api.php?year=' . rawurlencode((string) date('Y')) . '&month=' . rawurlencode((string) date('n'));

@@ -14,8 +14,8 @@ function sanitize($data) {
 }
 
 /**
- * Safe relative path for post-login redirects (no open redirect).
- * Allows same-site paths like admin/test-alert-email.php or index.php.
+ * Ruta relativa segura para redirecciones tras el login (sin redirección abierta).
+ * Permite rutas del mismo sitio como admin/test-alert-email.php o index.php.
  */
 function safe_redirect_path(?string $raw): ?string {
     if ($raw === null || $raw === '') {
@@ -81,7 +81,7 @@ function getBookedDates($pdo, $year, $month) {
         return [];
     }
 }
-// functions.php
+// (continuación de functions.php)
 
 function getLatestTips($pdo, $limit = 3) {
     try {
@@ -112,7 +112,7 @@ function verifyCsrfToken($token) {
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 
-// Alias functions for Spanish naming convention (used in admin files)
+// Funciones alias para la convención de nombres en español (archivos de administración)
 function iniciarSesion() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -126,7 +126,7 @@ function verificarRol($rolRequerido) {
     if ($rolRequerido === 'admin') {
         return isAdmin();
     }
-    // For 'user' role, any logged in user qualifies
+    // Para el rol 'user', vale cualquier usuario con sesión iniciada
     return isset($_SESSION['user_role']);
 }
 
@@ -155,7 +155,7 @@ function validarEmail($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
-// File upload validation functions
+// Funciones de validación de subida de archivos
 function validarArchivoImagen($archivo) {
     $errores = [];
     
@@ -164,20 +164,20 @@ function validarArchivoImagen($archivo) {
         return $errores;
     }
     
-    // Size validation (5MB max)
+    // Validación de tamaño (máx. 5 MB)
     $tamanoMaximo = 5 * 1024 * 1024;
     if ($archivo['size'] > $tamanoMaximo) {
         $errores[] = "La imagen es demasiado grande (máximo 5MB).";
     }
     
-    // MIME type validation
+    // Validación del tipo MIME
     $tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     $mimeType = mime_content_type($archivo['tmp_name']);
     if (!in_array($mimeType, $tiposPermitidos)) {
         $errores[] = "El archivo debe ser una imagen válida (JPG, PNG o GIF).";
     }
     
-    // Magic byte validation (more secure than MIME type alone)
+    // Validación por «magic bytes» (más segura que solo el tipo MIME)
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $detectedMime = finfo_file($finfo, $archivo['tmp_name']);
     finfo_close($finfo);
@@ -207,7 +207,7 @@ function validarArchivoImagen($archivo) {
         $errores[] = "El archivo no es una imagen válida (validación de contenido fallida).";
     }
     
-    // Filename sanitization
+    // Sanitización del nombre de archivo
     $nombreOriginal = $archivo['name'];
     $extension = strtolower(pathinfo($nombreOriginal, PATHINFO_EXTENSION));
     $extensionesPermitidas = ['jpg', 'jpeg', 'png', 'gif'];
@@ -219,11 +219,11 @@ function validarArchivoImagen($archivo) {
 }
 
 function sanitizarNombreArchivo($nombreOriginal) {
-    // Remove any path components
+    // Eliminar cualquier componente de ruta
     $nombre = basename($nombreOriginal);
-    // Remove special characters, keep only alphanumeric, dots, hyphens, underscores
+    // Quitar caracteres especiales; solo alfanuméricos, puntos, guiones y guiones bajos
     $nombre = preg_replace('/[^a-zA-Z0-9._-]/', '', $nombre);
-    // Generate unique name with timestamp and random string
+    // Generar nombre único con marca temporal y cadena aleatoria
     $extension = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
     $nombreBase = uniqid('img_', true) . '_' . time();
     return $nombreBase . '.' . $extension;

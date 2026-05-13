@@ -1,12 +1,12 @@
 <?php
 // populate_motor_news.php
-// Script to populate database with real motor news from motor.es RSS feed
+// Rellena la base de datos con noticias reales del RSS de motor.es
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/news_importer.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// Check if user is admin
+// Comprobar que el usuario sea administrador
 session_start();
 if (!isAdmin()) {
     die("Acceso Denegado");
@@ -18,7 +18,7 @@ echo "<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstra
 echo "<body class='bg-light'><div class='container py-5'><div class='card shadow'><div class='card-body'>";
 echo "<h1 class='mb-4'>Importación de Noticias de Motor.es</h1>";
 
-// Run the importer
+// Ejecutar el importador
 $result = importMotorNews($pdo, 20);
 
 if ($result['success']) {

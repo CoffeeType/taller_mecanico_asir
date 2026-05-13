@@ -6,13 +6,13 @@ try {
     $imagen = "https://example.com/image.jpg";
     $texto = "Este es un texto de prueba para el consejo.";
     $fecha = date('Y-m-d');
-    $idUser = 1; // Existing admin user
+    $idUser = 1; // Usuario admin existente
 
     $stmt = $pdo->prepare("INSERT INTO consejos (titulo, imagen, texto, fecha, idUser) VALUES (?, ?, ?, ?, ?)");
     $stmt->execute([$titulo, $imagen, $texto, $fecha, $idUser]);
     echo "Insertion successful! idConsejo: " . $pdo->lastInsertId() . "\n";
     
-    // Clean up
+    // Limpiar fila de prueba
     $pdo->prepare("DELETE FROM consejos WHERE titulo = ?")->execute([$titulo]);
     echo "Cleanup successful.\n";
 } catch (PDOException $e) {

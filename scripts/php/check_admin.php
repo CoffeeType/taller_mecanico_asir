@@ -8,7 +8,7 @@ try {
     foreach ($admins as $admin) {
         echo "- User: " . $admin['usuario'] . ", idUser: " . $admin['idUser'] . "\n";
         
-        // Check if this idUser exists in users_data
+        // Comprobar si este idUser existe en users_data
         $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM users_data WHERE idUser = ?");
         $stmt2->execute([$admin['idUser']]);
         $exists = $stmt2->fetchColumn();

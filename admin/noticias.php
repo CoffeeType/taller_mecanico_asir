@@ -11,7 +11,7 @@ if (!isAdmin()) {
 }
 
 require_once '../includes/header.php';
-require_once '../includes/news_importer.php'; // Add importer
+require_once '../includes/news_importer.php'; // importador de noticias
 
 $errors = [];
 $success = '';
@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fecha = $_POST['fecha'] ?? date('Y-m-d');
     $idNoticia = $_POST['idNoticia'] ?? null;
     
-    // Handle RSS Reload
+    // Recargar desde RSS
     if ($action === 'reload_rss') {
         $result = importMotorNews($pdo);
         if ($result['success']) {
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = $result['message'];
         }
     }
-    // Handle specific CRUD actions
+    // Acciones CRUD concretas
     elseif ($action === 'create') {
         try {
             $stmt = $pdo->prepare("INSERT INTO noticias (titulo, imagen, texto, fecha, idUser, enlace) VALUES (?, ?, ?, ?, ?, ?)");
@@ -67,7 +67,7 @@ $noticias = $pdo->query("SELECT * FROM noticias ORDER BY fecha DESC")->fetchAll(
 
 <h1 class="mb-4 text-center"><i class="bi bi-newspaper me-2"></i>Administrar Noticias</h1>
 
-<!-- System Status Diagnostics -->
+<!-- Diagnóstico del sistema -->
 <?php
 $dbStatus = isset($pdo) ? '<span class="badge bg-success">DB Conectada</span>' : '<span class="badge bg-danger">DB Error</span>';
 $adminUserCheck = $pdo->query("SELECT COUNT(*) FROM users_login WHERE rol='admin'")->fetchColumn();
@@ -95,7 +95,7 @@ $extCurl = extension_loaded('curl') ? '<span class="badge bg-success">cURL OK</s
 <?php endif; ?>
 
 <div class="row">
-    <!-- Editor Form -->
+    <!-- Formulario de edición -->
     <div class="col-lg-4 mb-4">
         <div class="card shadow-sm sticky-top" style="top: 2rem; z-index: 1;">
             <div class="card-header bg-primary text-white">
@@ -136,7 +136,7 @@ $extCurl = extension_loaded('curl') ? '<span class="badge bg-success">cURL OK</s
         </div>
     </div>
 
-    <!-- News List -->
+    <!-- Listado de noticias -->
     <div class="col-lg-8">
         <div class="card shadow-sm">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">

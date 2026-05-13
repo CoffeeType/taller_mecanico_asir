@@ -216,6 +216,7 @@ normalize_env_defaults() {
   prometheus_port="$(read_env_value "$file" PROMETHEUS_HOST_PORT || printf '9090')"
   grafana_port="$(read_env_value "$file" GRAFANA_HOST_PORT || printf '3000')"
   alertmanager_port="$(read_env_value "$file" ALERTMANAGER_HOST_PORT || printf '9093')"
+  # TRAFFIC_SIMULATOR_UI_HOST_PORT = docker-compose.aws.yml (en local: TRAFFIC_SIMULATOR_UI_PORT en docker-compose.yml).
   traffic_ui_port="$(read_env_value "$file" TRAFFIC_SIMULATOR_UI_HOST_PORT || printf '8890')"
   set_env_value "$file" PROMETHEUS_EXTERNAL_URL "http://${host}:${prometheus_port}"
   set_env_value "$file" GRAFANA_EXTERNAL_URL "http://${host}:${grafana_port}"

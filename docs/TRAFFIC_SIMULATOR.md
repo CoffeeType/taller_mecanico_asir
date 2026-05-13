@@ -9,7 +9,7 @@ JMeter se instala dentro de la imagen `traffic-simulator` durante el build. La i
 **Ya no existe** panel en `admin/` ni `/api/simulate.php`. El control está en:
 
 - **`traffic-simulator`**: API HTTP interna (`8085`) que genera un plan JMX temporal y ejecuta Apache JMeter, **solo red Docker**.
-- **`traffic-simulator-ui`**: interfaz web en **puerto publicado** (p. ej. `TRAFFIC_SIMULATOR_UI_PORT`, por defecto `8890`). El token `SIMULATOR_CONTROL_TOKEN` solo vive en el servidor/contenedor backend (la UI llama a su `api.php` server-side).
+- **`traffic-simulator-ui`**: interfaz web en **puerto publicado** (por defecto **8890**). En `docker-compose.yml` / `.env.example` el puerto del host se define con `TRAFFIC_SIMULATOR_UI_PORT`; en `docker-compose.aws.yml` / `.env.aws.example` se usa `TRAFFIC_SIMULATOR_UI_HOST_PORT`. `scripts/start-jmeter-ui.ps1` intenta leer primero `TRAFFIC_SIMULATOR_UI_PORT` y si falta usa `TRAFFIC_SIMULATOR_UI_HOST_PORT`. El token `SIMULATOR_CONTROL_TOKEN` solo vive en el servidor/contenedor backend (la UI llama a su `api.php` server-side).
 
 ## Arranque (Docker Compose, recomendado)
 
@@ -29,6 +29,7 @@ El script arranca Docker Desktop si hace falta, levanta `web`, `mysql`, `traffic
 SIMULATOR_CONTROL_TOKEN=tu_token_largo_seguro
 SIM_BASE_URL=http://web
 TRAFFIC_SIMULATOR_UI_PORT=8890
+# En EC2 / docker-compose.aws.yml usa TRAFFIC_SIMULATOR_UI_HOST_PORT (mismo valor por defecto).
 SIM_UI_DEFAULT_BASE_URL=http://web
 JMETER_VERSION=5.6.3
 SIM_JMETER_HEAP="-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
@@ -44,9 +45,17 @@ GRAFANA_EXTERNAL_URL=http://localhost:3000
 docker compose --profile traffic up -d
 ```
 
-3. Abre la UI: **http://localhost:8890** (puerto desde `TRAFFIC_SIMULATOR_UI_PORT`).
+3. Comprueba salud HTTP (sustituye el puerto si lo cambiaste: `TRAFFIC_SIMULATOR_UI_PORT` en local, `TRAFFIC_SIMULATOR_UI_HOST_PORT` en AWS):
 
-4. Opcional CLI en el servicio worker:
+```bash
+curl -sS http://localhost:8890/health.php
+```
+
+Debe devolver JSON con `"status":"ok"`. Si Docker no responde (`Cannot connect to the Docker daemon` / error del *pipe* en Windows), arranca **Docker Desktop** y espera a que el icono quede estable antes de repetir el comando.
+
+4. Abre la UI en el navegador (mismo puerto que en el paso anterior; en local suele ser **http://localhost:8890/**).
+
+5. Opcional CLI en el servicio worker:
 
 ```bash
 docker compose run --rm traffic-simulator \

@@ -341,72 +341,30 @@ Variables útiles:
 
 El script **no** hace `source .env` (evita romper contraseñas con `$`, `#`, espacios, etc.): pasa variables a Compose con `--env-file .env` cuando existe. Puertos para las comprobaciones (`WEB_HOST_PORT`, `PROMETHEUS_HOST_PORT`, etc.) se leen del mismo fichero sin evaluarlo como shell.
 
-### Redespliegue automático con GitHub Actions (push a `main`)
+### Redespliegue manual por SSH
 
-El repositorio incluye el workflow [`.github/workflows/deploy-aws.yml`](../.github/workflows/deploy-aws.yml). En cada **push** a la rama `main` (y manualmente con *workflow_dispatch*):
+Para actualizar la instancia, entra por SSH, ve a la ruta del clon (por defecto `/opt/taller_mecanico_asir`), trae la rama deseada con `git pull --ff-only` y ejecuta [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh).
 
-1. Se ejecuta [`scripts/verify-builds.sh`](../scripts/verify-builds.sh) en el runner.
-2. Se conecta por **SSH** a la instancia EC2 y en la ruta del clon (por defecto `/opt/taller_mecanico_asir`, configurable con el secret `AWS_EC2_PROJECT_DIR`) ejecuta `git fetch`, checkout de la rama (`main` por defecto, o `AWS_EC2_GIT_BRANCH`), `git pull --ff-only` y `./scripts/deploy_aws_docker.sh`.
-
-**Secrets** del repositorio en GitHub (*Settings → Secrets and variables → Actions*):
-
-| Secret | Descripción |
-|--------|-------------|
-| `AWS_EC2_HOST` | Hostname o IP pública de la instancia (obligatorio). |
-| `AWS_EC2_USER` | Usuario SSH (p. ej. `ec2-user` en Amazon Linux). |
-| `AWS_EC2_SSH_KEY` | Clave privada PEM completa (multilínea; pegar tal cual en el secret). |
-| `AWS_EC2_SSH_PORT` | Opcional. Puerto SSH si no es `22`. |
-| `AWS_EC2_PROJECT_DIR` | Opcional. Ruta absoluta del clon en la EC2 (por defecto `/opt/taller_mecanico_asir`). |
-| `AWS_EC2_GIT_BRANCH` | Opcional. Rama a desplegar (por defecto `main`). |
-
-#### Configurar secrets y lanzar el workflow
-
-Opción rápida desde la interfaz de GitHub:
-
-1. Repo en GitHub → **Settings** → **Secrets and variables** → **Actions**.
-2. **New repository secret** para `AWS_EC2_HOST`, `AWS_EC2_USER`, `AWS_EC2_SSH_KEY` y, si aplica, `AWS_EC2_SSH_PORT`, `AWS_EC2_PROJECT_DIR`, `AWS_EC2_GIT_BRANCH`.
-3. En `AWS_EC2_SSH_KEY`, pega el contenido completo del `.pem`, incluidas las líneas `BEGIN` y `END`.
-4. Ve a **Actions** → **Deploy to AWS EC2** → **Run workflow** → rama `main`.
-
-Opción reproducible desde terminal con GitHub CLI (`gh`):
-
-```powershell
-# Una vez por equipo, si no hay sesión:
-gh auth login --hostname github.com --git-protocol https --web --scopes repo
-
-# Valores de despliegue (ajusta IP/host, usuario, puerto y ruta del PEM):
-gh secret set AWS_EC2_HOST --repo CoffeeType/taller_mecanico_asir --body "IP_O_HOST_EC2"
-gh secret set AWS_EC2_USER --repo CoffeeType/taller_mecanico_asir --body "ec2-user"
-gh secret set AWS_EC2_SSH_PORT --repo CoffeeType/taller_mecanico_asir --body "22"
-Get-Content -LiteralPath "C:\ruta\a\clave.pem" -Raw | gh secret set AWS_EC2_SSH_KEY --repo CoffeeType/taller_mecanico_asir
-
-# Comprobar que existen por nombre (GitHub no muestra valores):
-gh secret list --repo CoffeeType/taller_mecanico_asir
+```bash
+cd /opt/taller_mecanico_asir
+git pull --ff-only
+./scripts/deploy_aws_docker.sh
 ```
 
-Antes de lanzar el workflow, valida que el PEM, usuario, puerto e IP realmente conectan con la EC2:
+Antes de desplegar, valida que el PEM, usuario, puerto e IP realmente conectan con la EC2:
 
 ```powershell
 ssh -i "C:\ruta\a\clave.pem" -p 22 -o BatchMode=yes -o ConnectTimeout=10 ec2-user@IP_O_HOST_EC2 "echo ok"
 ```
 
-Si devuelve `ok`, lanza el despliegue manual:
-
-```powershell
-gh workflow run deploy-aws.yml --repo CoffeeType/taller_mecanico_asir --ref main
-gh run list --repo CoffeeType/taller_mecanico_asir --workflow deploy-aws.yml --limit 3
-gh run watch <RUN_ID> --repo CoffeeType/taller_mecanico_asir --exit-status
-```
-
 Notas de seguridad y operación:
 
 - No commitees el `.pem`, `.env` reales ni salidas que contengan secretos.
-- Si el PEM se expone fuera de GitHub Secrets o de un almacén seguro, rota el key pair/usuario de despliegue.
-- Si el workflow falla con `missing secret`, revisa los nombres exactos anteriores.
-- Si falla con `Permission denied (publickey)`, revisa `AWS_EC2_USER`, `AWS_EC2_SSH_KEY`, puerto SSH y reglas del Security Group.
-- Si falla en `git pull --ff-only`, entra en la EC2 y resuelve cambios locales en `/opt/taller_mecanico_asir` antes de relanzar.
+- Si el PEM se expone fuera de un almacén seguro, rota el key pair/usuario de despliegue.
+- Si falla con `Permission denied (publickey)`, revisa usuario SSH, clave privada, puerto SSH y reglas del Security Group.
+- Si falla en `git pull --ff-only`, resuelve cambios locales en `/opt/taller_mecanico_asir` antes de relanzar.
 
-Requisitos en el servidor: ruta fija `/opt/taller_mecanico_asir` (como en [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh)), acceso `git` al remoto (repo público o credenciales ya configuradas en el host) y que el usuario SSH pueda ejecutar Docker (grupo `docker` o uso de `sudo` si adaptas el workflow). Si hay cambios locales sin commit en la instancia, `git pull --ff-only` fallará hasta resolverlos.
+Requisitos en el servidor: ruta fija `/opt/taller_mecanico_asir` (como en [`ec2-user-data-bootstrap.sh`](../scripts/ec2-user-data-bootstrap.sh)), acceso `git` al remoto (repo público o credenciales ya configuradas en el host) y que el usuario SSH pueda ejecutar Docker (grupo `docker` o uso de `sudo` si adaptas el script).
 
 ### Modo anti-colapso / recovery
 
@@ -460,7 +418,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 
 - **RDS MySQL** (o Aurora compatible MySQL) + cambiar `DB_HOST` / variables según endpoint gestionado (véase alias en [`config/database.php`](../config/database.php)).
 - **Separar monitorización** en otra instancia o servicio gestionado para reducir carga en la app.
-- **CI/CD**: el workflow [`.github/workflows/deploy-aws.yml`](../.github/workflows/deploy-aws.yml) redespliega por SSH al hacer push a `main`; alternativas: CodeDeploy, SSM Run Command o runner self-hosted en la VPC.
+- **Despliegue gestionado**: si necesitas automatizar releases, valora CodeDeploy, SSM Run Command o un servicio de orquestación interno.
 
 ## Referencias cruzadas
 

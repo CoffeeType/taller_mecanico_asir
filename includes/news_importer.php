@@ -17,14 +17,14 @@ function importMotorNews($pdo, $limit = 20) {
     try {
         logImport("Starting import...");
         
-        // Step 1: Fetch news from motor.es FIRST
+        // Paso 1: obtener noticias de motor.es primero
         logImport("Fetching news from RSS...");
         $motorNews = fetchMotorNews($limit);
         
-        // STRICT TYPE CHECK: Ensure we have an array
+        // Comprobación estricta de tipo: debe ser array
         if (!is_array($motorNews)) {
             logImport("CRITICAL: fetchMotorNews returned non-array type: " . gettype($motorNews));
-            $motorNews = []; // Fallback to empty array
+            $motorNews = []; // Reserva: array vacío
         }
         
         logImport("Fetched " . count($motorNews) . " items.");
@@ -38,7 +38,7 @@ function importMotorNews($pdo, $limit = 20) {
             ];
         }
 
-        // Step 2: Get admin user ID (first admin user)
+        // Paso 2: ID del usuario administrador (primer admin)
         $stmt = $pdo->query("
             SELECT ul.idUser 
             FROM users_login ul 
@@ -58,13 +58,13 @@ function importMotorNews($pdo, $limit = 20) {
         $adminId = $adminUser['idUser'];
         logImport("Admin ID: $adminId");
         
-        // Step 3: Clear existing news ONLY if we have new data
+        // Paso 3: borrar noticias antiguas solo si hay datos nuevos
         logImport("Clearing old news...");
         $stmt = $pdo->prepare("DELETE FROM noticias");
         $stmt->execute();
         
-        // Step 4: Insert news into database
-        // Set UTF-8 for the connection if not already set
+        // Paso 4: insertar noticias en la base de datos
+        // UTF-8 en la conexión si no estaba ya
         $pdo->exec("SET NAMES utf8mb4");
         
         $stmt = $pdo->prepare("
@@ -76,7 +76,7 @@ function importMotorNews($pdo, $limit = 20) {
         foreach ($motorNews as $news) {
             $fecha = date('Y-m-d', strtotime($news['date']));
             
-            // Clean and sanitize text
+            // Limpiar y sanear texto
             $texto = $news['description'];
             if (function_exists('mb_convert_encoding')) {
                 $texto = mb_convert_encoding($texto, 'UTF-8', 'UTF-8');
@@ -84,22 +84,22 @@ function importMotorNews($pdo, $limit = 20) {
             $texto = preg_replace('/[^\p{L}\p{N}\s\.,;:?!¿¡\-]/u', '', $texto);
             $texto = trim($texto);
             
-            // Add link to original article
+            // Enlace al artículo original
             $textoCompleto = $texto . "\n\nFuente: Motor.es";
             
             try {
                 $stmt->execute([
                     $adminId,
-                    mb_substr($news['title'], 0, 200), // Limit title length
+                    mb_substr($news['title'], 0, 200), // Límite de longitud del título
                     $textoCompleto,
-                    !empty($news['image']) ? $news['image'] : '', // Ensure string
+                    !empty($news['image']) ? $news['image'] : '', // Garantizar string
                     $fecha,
-                    $news['link'] ?: null, // Insert link
+                    $news['link'] ?: null, // Guardar enlace
                 ]);
                 $insertedCount++;
             } catch (PDOException $e) {
                 logImport("Insert error: " . $e->getMessage());
-                // Skip duplicates or errors silently
+                // Omitir duplicados u otros errores en silencio
                 continue;
             }
         }
