@@ -546,6 +546,7 @@ fi
 preflight_paths=(
   "database/database.sql"
   "scripts/run_jmeter_traffic.php"
+  "docker/traffic-simulator/assets/jmeter-report-custom.css"
   "monitoring/prometheus/prometheus.aws.yml"
   "monitoring/prometheus/alerts.yml"
   "monitoring/prometheus/blackbox.yml"

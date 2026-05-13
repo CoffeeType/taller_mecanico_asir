@@ -8,7 +8,7 @@
     ],
     "timezone": "",
     "uid": "taller-mecanico-main",
-    "version": 3,
+    "version": 4,
     "schemaVersion": 39,
     "refresh": "30s",
     "time": {
@@ -29,7 +29,7 @@
             },
             "options": {
                 "mode": "markdown",
-                "content": "| Sección | Qué muestra |\n|---------|---------------|\n| **Alertas y disponibilidad** | `up` por job y alertas Prometheus **critical** en *firing* |\n| **HTTP / aplicación** | RED: peticiones/s, % errores, latencias p50/p95/p99 |\n| **Host** | CPU, RAM, disco y red (node_exporter) |\n| **MySQL** | Conexiones, QPS por tipo, consultas lentas |\n| **Negocio** | Contadores exportados desde la app (usuarios, citas, noticias…) |\n| **Contenedores** | CPU y RAM por contenedor (cAdvisor) |\n| **Simulador** | Tráfico etiquetado como prueba de carga (Apache JMeter, métricas con origen simulator) |\n\n**Tablas de alertas:** si no hay filas, no hay reglas críticas activas en este instante."
+                "content": "| Sección | Qué muestra |\n|---------|---------------|\n| **Alertas y disponibilidad** | `up` por job y alertas Prometheus **critical** en *firing* |\n| **HTTP / aplicación** | RED: peticiones/s, % errores, latencias p50/p95/p99 |\n| **Host** | CPU, RAM, disco y red (node_exporter) |\n| **MySQL** | Conexiones, QPS por tipo, consultas lentas |\n| **Negocio** | Contadores exportados desde la app (usuarios, citas, noticias…) |\n| **Contenedores** | CPU y RAM por contenedor (cAdvisor) |\n| **Simulador** | Tráfico JMeter (`source=simulator`): paneles Prometheus abajo; el **informe HTML** nativo se abre desde la UI del simulador (*Dashboard JMeter*) cuando el run haya generado el reporte |\n\n**Tablas de alertas:** si no hay filas, no hay reglas críticas activas en este instante."
             }
         },
         {
@@ -1759,6 +1759,21 @@
             "title": "Consumo de Memoria por Contenedor"
         },
         {
+            "id": 201,
+            "type": "text",
+            "title": "Simulador (JMeter): lectura rápida",
+            "gridPos": {
+                "h": 4,
+                "w": 24,
+                "x": 0,
+                "y": 81
+            },
+            "options": {
+                "mode": "markdown",
+                "content": "**Métricas `source=simulator`:** peticiones de prueba de carga (Apache JMeter). Para verlas aquí hace falta el perfil Compose **`traffic`**, el worker JMeter activo y el **mismo volumen `./logs`** que consume Prometheus/php-exporter.\n\n**Dónde lanzar la prueba:** interfaz web **traffic-simulator-ui** (puerto publicado, p. ej. 8890). Tras el run, el enlace **Dashboard JMeter** abre el **informe HTML** nativo; **esta fila** resume el tráfico del simulador en Grafana."
+            }
+        },
+        {
             "id": 18,
             "title": "Simulador: requests/s por método",
             "type": "timeseries",
@@ -1766,7 +1781,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 81
+                "y": 85
             },
             "targets": [
                 {
@@ -1787,12 +1802,15 @@
                     "custom": {
                         "axisPlacement": "auto",
                         "drawStyle": "line",
-                        "fillOpacity": 10,
+                        "fillOpacity": 28,
+                        "gradientMode": "hue",
+                        "lineInterpolation": "smooth",
                         "lineWidth": 2,
                         "showPoints": "never"
                     },
                     "unit": "reqps"
-                }
+                },
+                "overrides": []
             },
             "options": {
                 "tooltip": {
@@ -1818,7 +1836,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 81
+                "y": 85
             },
             "targets": [
                 {
@@ -1848,12 +1866,46 @@
                     "custom": {
                         "axisPlacement": "auto",
                         "drawStyle": "line",
-                        "fillOpacity": 10,
+                        "fillOpacity": 22,
+                        "gradientMode": "opacity",
+                        "lineInterpolation": "smooth",
                         "lineWidth": 2,
                         "showPoints": "never"
                     },
                     "unit": "reqps"
-                }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "éxitos"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "green",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "errores"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "red",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
             },
             "options": {
                 "tooltip": {
@@ -1873,13 +1925,14 @@
         },
         {
             "id": 20,
+            "description": "Porcentaje de respuestas 4xx–5xx sobre el total del simulador. Sin tráfico reciente las series pueden quedar vacías.",
             "title": "Simulador: tasa de error HTTP %",
             "type": "timeseries",
             "gridPos": {
                 "h": 7,
                 "w": 24,
                 "x": 0,
-                "y": 89
+                "y": 93
             },
             "targets": [
                 {
@@ -1900,12 +1953,13 @@
                     "custom": {
                         "axisPlacement": "auto",
                         "drawStyle": "line",
-                        "fillOpacity": 10,
+                        "fillOpacity": 18,
                         "lineWidth": 2,
                         "showPoints": "never"
                     },
                     "max": 100,
                     "min": 0,
+                    "noValue": "Sin datos del simulador",
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
@@ -1924,7 +1978,8 @@
                         ]
                     },
                     "unit": "percent"
-                }
+                },
+                "overrides": []
             },
             "options": {
                 "tooltip": {

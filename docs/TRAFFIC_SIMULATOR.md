@@ -35,6 +35,7 @@ JMETER_VERSION=5.6.3
 SIM_JMETER_HEAP="-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
 SIM_JMETER_WORK_DIR=/var/www/html/logs/jmeter
 SIM_JMETER_HTML_REPORT=true
+# SIM_JMETER_REPORT_CSS_SOURCE=/opt/traffic-simulator/assets/jmeter-report-custom.css
 PROMETHEUS_EXTERNAL_URL=http://localhost:9090
 GRAFANA_EXTERNAL_URL=http://localhost:3000
 ```
@@ -77,6 +78,7 @@ El volumen `./logs` debe ser el mismo entre `traffic-simulator` y `traffic-simul
   - `logs/response_time.log`: tiempo en segundos.
 - `SIM_JMETER_HEAP` controla la memoria de Java. Para EC2 pequeño se recomienda mantener el valor por defecto; para más carga, sube heap y `TRAFFIC_SIMULATOR_MEM_LIMIT` juntos.
 - Con `SIM_JMETER_HTML_REPORT=true`, JMeter añade un reporte HTML en `html-report`. La **UI JMeter** lo enlaza como **Dashboard JMeter** cuando la ejecución termina.
+- Tras cada run, el runner copia un CSS opcional al directorio del informe y lo enlaza en `index.html` (mejoras cosméticas). La ruta del fichero fuente se define con `SIM_JMETER_REPORT_CSS_SOURCE` (por defecto en la imagen `traffic-simulator`: `/opt/traffic-simulator/assets/jmeter-report-custom.css`).
 
 ### Sin el perfil `traffic`
 

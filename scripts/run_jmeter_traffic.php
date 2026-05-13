@@ -4,6 +4,9 @@
  *
  * Genera un plan JMX desde la config del simulador, ejecuta JMeter en modo CLI
  * y vuelca resultados JTL en logs/metrics.log + logs/response_time.log.
+ *
+ * Entorno (informe HTML): SIM_JMETER_HTML_REPORT, SIM_JMETER_REPORT_CSS_SOURCE
+ * (ruta al CSS copiado junto a index.html del reporte; por defecto en imagen Docker).
  */
 
 declare(strict_types=1);
@@ -52,6 +55,49 @@ function jt_write_status(string $path, array $payload): void
 function jt_report_ready(string $reportDir): bool
 {
     return is_file(rtrim($reportDir, '/\\') . '/index.html');
+}
+
+/**
+ * Copia CSS opcional al directorio del informe HTML y enlaza index.html (post-procesado tras JMeter -e -o).
+ */
+function jt_decorate_jmeter_html_report(string $reportDir, bool $htmlReportEnabled): void
+{
+    if (!$htmlReportEnabled) {
+        return;
+    }
+    $dir = rtrim($reportDir, '/\\');
+    $indexPath = $dir . DIRECTORY_SEPARATOR . 'index.html';
+    if (!is_file($indexPath) || !is_readable($indexPath)) {
+        return;
+    }
+    $cssName = 'jmeter-report-custom.css';
+    $destCss = $dir . DIRECTORY_SEPARATOR . $cssName;
+    $src = getenv('SIM_JMETER_REPORT_CSS_SOURCE');
+    if ($src === false || $src === '') {
+        $src = '/opt/traffic-simulator/assets/jmeter-report-custom.css';
+    }
+    if (is_file($src) && is_readable($src)) {
+        @copy($src, $destCss);
+    }
+    if (!is_file($destCss) || !is_readable($destCss)) {
+        return;
+    }
+    $html = @file_get_contents($indexPath);
+    if ($html === false || $html === '') {
+        return;
+    }
+    if (str_contains($html, $cssName)) {
+        return;
+    }
+    $link = '<link rel="stylesheet" href="' . htmlspecialchars($cssName, ENT_QUOTES, 'UTF-8') . '">';
+    $injectCount = 0;
+    $updated = str_replace('</head>', $link . "\n</head>", $html, $injectCount);
+    if ($injectCount === 0) {
+        $updated = str_ireplace('</head>', $link . "\n</head>", $html, $injectCount);
+    }
+    if ($injectCount > 0) {
+        @file_put_contents($indexPath, $updated, LOCK_EX);
+    }
 }
 
 try {
@@ -159,6 +205,8 @@ do {
 $exitCode = proc_close($process);
 $imported = traffic_simulator_import_jmeter_jtl($files['results_jtl'], $metricsLog, $responseTimeLog, $imported);
 @unlink($jmeterPidFile);
+
+jt_decorate_jmeter_html_report($files['report_dir'], $htmlReport);
 
 jt_write_status($statusFile, $baseStatus + [
     'running'          => false,

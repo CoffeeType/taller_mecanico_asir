@@ -21,6 +21,10 @@ RUN set -eux; \
 
 WORKDIR /opt/traffic-simulator
 
+RUN mkdir -p /opt/traffic-simulator/assets
+
+COPY docker/traffic-simulator/assets/jmeter-report-custom.css /opt/traffic-simulator/assets/jmeter-report-custom.css
+
 COPY scripts/simulate_traffic.php scripts/run_jmeter_traffic.php scripts/traffic_simulator_lib.php ./scripts/
 COPY docker/traffic-simulator/control_router.php ./control_router.php
 COPY docker/traffic-simulator/entrypoint.sh /entrypoint.sh
