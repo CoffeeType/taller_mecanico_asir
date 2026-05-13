@@ -1,16 +1,13 @@
-FROM php:8.2-cli
+FROM php:8.2-cli-bookworm
 
 ARG JMETER_VERSION=5.6.3
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl \
-        wget \
-        ca-certificates \
         openjdk-17-jre-headless \
-        libcurl4-openssl-dev \
-        pkg-config \
-    && docker-php-ext-install curl \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
