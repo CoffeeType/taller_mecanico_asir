@@ -5,9 +5,9 @@ Sistema web completo desarrollado con PHP y MySQL para la gestión de un taller 
 ## 🚀 Características Principales
 
 - ✅ **Gestión de Usuarios:** Sistema de registro, login y perfiles con roles (admin/user)
-- ✅ **Gestión de Citas:** Los usuarios pueden crear, editar y eliminar sus citas
-- ✅ **Sistema de Noticias:** Los administradores pueden publicar noticias con imágenes
-- ✅ **Panel de Administración:** CRUD completo para usuarios, citas y noticias
+- ✅ **Citaciones:** Reserva de citas con calendario y franjas horarias (`citaciones.php`); historial de citas para usuarios registrados
+- ✅ **Sistema de Noticias y Consejos:** Noticias (RSS o manuales) y consejos de mantenimiento editados por administradores
+- ✅ **Panel de Administración:** CRUD en `admin/` para usuarios, citas, noticias y consejos
 - ✅ **Monitorización:** Sistema completo con Prometheus y Grafana (solo con Docker)
 - ✅ **Seguridad:** Protección contra SQL Injection, XSS, validación de sesiones
 - ✅ **Pruebas de carga con Apache JMeter (opcional):** generación de HTTP real desde contenedores Docker (`traffic-simulator` / UI en puerto publicado), sin formar parte del panel admin — ver [docs/TRAFFIC_SIMULATOR.md](docs/TRAFFIC_SIMULATOR.md)
@@ -20,7 +20,7 @@ Sistema web completo desarrollado con PHP y MySQL para la gestión de un taller 
 - **Servidor Web:** Apache 2.4
 - **Contenedores:** Docker & Docker Compose
 - **Monitorización:** Prometheus, Grafana, Node Exporter, MySQL Exporter
-- **Alertas:** Alertmanager (notificaciones por email)
+- **Alertas:** Alertmanager (notificaciones por correo electrónico)
 
 ## Estructura del Proyecto
 
@@ -35,10 +35,11 @@ taller_mecanico_asir/
 │   ├── footer.php          # Footer común
 │   ├── functions.php       # Funciones auxiliares
 │   └── metrics_logger.php  # Sistema de logging de métricas HTTP
+├── css/
+│   └── style.css           # Estilos principales (enlazado desde includes/header.php)
+├── img/                    # Logo, hero y recursos estáticos de marca
 ├── assets/
-│   ├── css/
-│   │   └── style.css       # Estilos principales
-│   └── images/             # Imágenes del sitio y noticias
+│   └── images/             # Imágenes subidas (noticias, consejos)
 ├── monitoring/
 │   ├── prometheus/
 │   │   └── prometheus.yml   # Configuración de Prometheus
@@ -59,10 +60,15 @@ taller_mecanico_asir/
 ├── login.php                # Página de inicio de sesión
 ├── logout.php               # Cerrar sesión
 ├── perfil.php               # Perfil de usuario
-├── citaciones.php           # Gestión de citas para usuarios
-├── usuarios-administracion.php    # CRUD usuarios para admin
-├── citas-administracion.php       # CRUD citas para admin
-├── noticias-administracion.php    # CRUD noticias para admin
+├── citaciones.php           # Citaciones / reservas (calendario y franjas horarias)
+├── consejo.php              # Listado público de consejos
+├── api/                     # API JSON (p. ej. citas_api.php)
+├── admin/                   # Panel de administración (canónico)
+├── usuarios-administracion.php  # Legacy PFC → usar admin/usuarios.php
+├── citas-administracion.php     # Legacy PFC → usar admin/citas.php
+├── noticias-administracion.php  # Legacy PFC → usar admin/noticias.php
+├── scripts/                 # Despliegue, JMeter, comprobaciones (verify_local.ps1, etc.)
+├── tests/                   # Pruebas ad hoc PHP (sin PHPUnit)
 ├── Dockerfile               # Imagen Docker de la aplicación
 ├── docker-compose.yml       # Orquestación de servicios
 ├── docker-compose.dokploy.yml # Orquestación para Dokploy (producción)
@@ -78,7 +84,9 @@ taller_mecanico_asir/
 │   ├── AWS_DOCKER_DEPLOYMENT.md     # Guía de despliegue en AWS (EC2 + Docker + Packer)
 │   ├── MONITORING_SETUP_GUIDE.md    # Guía del sistema de monitorización
 │   ├── GUIA_DESPLIEGUE_LOCAL.md     # Guía despliegue local (XAMPP)
-│   └── TRAFFIC_SIMULATOR.md         # JMeter: perfil Docker `traffic`, variables y seguridad
+│   ├── COOLIFY_DEPLOYMENT.md        # Despliegue en Coolify
+│   ├── TRAFFIC_SIMULATOR.md         # JMeter: perfil Docker `traffic`, variables y seguridad
+│   └── README.md                    # Índice de documentación
 ```
 
 Índice de **estructura del proyecto y herramientas** (Docker, monitorización, JMeter, scripts): [docs/ESTRUCTURA_Y_HERRAMIENTAS.md](docs/ESTRUCTURA_Y_HERRAMIENTAS.md).
@@ -119,7 +127,7 @@ taller_mecanico_asir/
 
 ### Opción 1: Instalación con Docker (Recomendado) 🐳
 
-Para una instalación rápida y completa con monitorización incluida, consulta la [Guía de Despliegue con Docker](docs/DOCKER_DEPLOYMENT.md).
+Para una instalación rápida y completa con monitorización incluida, consulta la [Guía de Despliegue con Docker](docs/DOCKER_DEPLOYMENT.md). Los comandos usan **`docker compose`** (V2); los ficheros de stack se llaman `docker-compose.yml`, etc.
 
 **Inicio rápido:**
 
@@ -133,10 +141,10 @@ cd taller_mecanico_asir
 cp .env.example .env
 
 # Iniciar todos los servicios
-docker-compose up -d
+docker compose up -d
 
 # Verificar que todo está funcionando
-docker-compose ps
+docker compose ps
 ```
 
 **En Windows (PowerShell):**
@@ -159,10 +167,10 @@ REM Configurar variables de entorno
 copy .env.example .env
 
 REM Iniciar todos los servicios
-docker-compose up -d
+docker compose up -d
 
 REM Verificar que todo está funcionando
-docker-compose ps
+docker compose ps
 ```
 
 **Acceso a los servicios:**
@@ -193,7 +201,7 @@ Este proyecto incluye un compose pensado para Dokploy: `docker-compose.dokploy.y
 2. Selecciona despliegue tipo **Docker Compose**.
 3. Configura el **Compose file** como `docker-compose.dokploy.yml`.
 4. En variables/secretos, crea las variables necesarias (ver siguiente punto).
-5. Lanza el **Deploy** y revisa logs si algo falla.
+5. Lanza el **despliegue** y revisa los registros si algo falla.
 
 #### 3) Configurar variables de entorno en Dokploy
 
@@ -214,7 +222,7 @@ Guía rápida: `docs/COOLIFY_DEPLOYMENT.md`.
 - `APP_ENV=production`, `APP_DEBUG=false`
 - (Opcional alertas) `ALERT_EMAIL_TO`, `SMTP_SMARTHOST`, `SMTP_FROM`, `SMTP_AUTH_USERNAME`, `SMTP_AUTH_PASSWORD`
 
-> Importante: En Coolify evita publicar puertos fijos al host (por ejemplo `9090:9090`, `9093:9093`, `3000:3000`), porque pueden colisionar con otros stacks y hacer fallar el deploy. Usa puertos internos y expón los servicios con **Domains/Routes** de Coolify.
+> Importante: En Coolify evita publicar puertos fijos al host (por ejemplo `9090:9090`, `9093:9093`, `3000:3000`), porque pueden colisionar con otros stacks y hacer fallar el despliegue. Usa puertos internos y expón los servicios con **Domains/Routes** de Coolify.
 
 #### 4) Configurar dominio y HTTPS (opción A: sin Cloudflare Tunnel)
 
@@ -397,7 +405,7 @@ C:\xampp\php\php.exe -S localhost:8000
 **⚠️ IMPORTANTE:** 
 - Cambia estas credenciales en producción
 - Las credenciales se configuran en el archivo `.env`
-- Para aplicar cambios, reinicia Grafana: `docker-compose restart grafana`
+- Para aplicar cambios, reinicia Grafana: `docker compose restart grafana`
 
 ### Acceso a Prometheus (Solo con Docker)
 
@@ -456,11 +464,9 @@ GRAFANA_PORT=3000
 
 ### 👥 Para Usuarios Registrados (rol: user)
 - Todas las funcionalidades de visitante
-- **Gestión de Citas:**
-  - Crear nuevas citas
-  - Editar citas futuras
-  - Eliminar citas futuras
-  - Ver historial de citas
+- **Citaciones** (`citaciones.php`):
+  - Solicitar una citación (fecha, franja horaria y motivo)
+  - Ver historial de citas agendadas (solo lectura)
 - **Gestión de Perfil:**
   - Ver y editar datos personales
   - Cambiar contraseña
@@ -473,64 +479,41 @@ GRAFANA_PORT=3000
   - Editar usuarios existentes
   - Eliminar usuarios
   - Cambiar roles (admin/user)
-- **Administración de Citas:**
-  - Ver todas las citas del sistema
-  - Crear citas para cualquier usuario
-  - Editar cualquier cita
-  - Eliminar cualquier cita
-- **Administración de Noticias:**
-  - Crear noticias con imágenes
-  - Editar noticias existentes
-  - Eliminar noticias
-  - Subir imágenes (JPG, PNG, máximo 5MB)
+- **Administración de citas** (`admin/citas.php`):
+  - Ver, editar y eliminar citas (incluidas de invitados)
+- **Administración de noticias** (`admin/noticias.php`):
+  - Crear, editar y eliminar noticias (imágenes JPG/PNG, máximo 5 MB)
+- **Administración de consejos** (`admin/consejos.php`):
+  - Crear, editar y eliminar consejos de mantenimiento
 - **Monitorización (solo con Docker):**
   - Acceso a Grafana para visualizar métricas
   - Dashboards de sistema, aplicación, base de datos y negocio
 
 ## 🗄️ Estructura de Base de Datos
 
-El sistema utiliza 4 tablas principales con relaciones mediante Foreign Keys:
+El esquema canónico está en `database/database.sql`. Tablas principales (relaciones mediante claves foráneas):
 
 ### Tabla: `users_data`
-Almacena la información personal de los usuarios:
-- `idUser` (PK, AUTO_INCREMENT) - Identificador único
-- `nombre` (VARCHAR, NOT NULL) - Nombre del usuario
-- `apellidos` (VARCHAR, NOT NULL) - Apellidos del usuario
-- `email` (VARCHAR, UNIQUE, NOT NULL) - Email único
-- `telefono` (VARCHAR, NOT NULL) - Teléfono de contacto
-- `fecha_de_nacimiento` (DATE, NOT NULL) - Fecha de nacimiento
-- `direccion` (TEXT) - Dirección (opcional)
-- `sexo` (ENUM: 'Masculino', 'Femenino', 'Otro', NOT NULL) - Sexo
+Información personal del usuario:
+- `idUser` (PK), `nombre`, `apellidos`, `email` (único), `telefono`, `fecha_de_nacimiento`, `direccion`, campos de dirección desglosados (`calle`, `codigo_postal`, `ciudad`, `provincia`), `sexo`
 
 ### Tabla: `users_login`
-Almacena las credenciales de acceso:
-- `idLogin` (PK, AUTO_INCREMENT) - Identificador único
-- `idUser` (FK a users_data, UNIQUE, NOT NULL) - Relación con users_data
-- `usuario` (VARCHAR, UNIQUE, NOT NULL) - Nombre de usuario único
-- `password` (VARCHAR(255), NOT NULL) - Hash bcrypt de la contraseña
-- `rol` (ENUM: 'admin', 'user', NOT NULL) - Rol del usuario
-
-**Relación:** Un usuario tiene una única cuenta de login (relación 1:1)
+Credenciales (relación 1:1 con `users_data`):
+- `idLogin` (PK), `idUser` (FK, único), `usuario` (único), `password` (bcrypt), `rol` (`admin` | `user`), `last_seen_at`
 
 ### Tabla: `citas`
-Almacena las citas de los usuarios:
-- `idCita` (PK, AUTO_INCREMENT) - Identificador único
-- `idUser` (FK a users_data, NOT NULL) - Usuario propietario de la cita
-- `fecha_cita` (DATE, NOT NULL) - Fecha de la cita
-- `motivo_cita` (TEXT) - Motivo o descripción de la cita
-
-**Relación:** Un usuario puede tener múltiples citas (relación 1:N)
+Citas persistidas tras una citación exitosa:
+- `idCita` (PK), `idUser` (FK, **nullable** para invitados), `fecha_cita`, `hora_cita`, `motivo_cita`
+- Invitado: `guest_name`, `guest_email`, `guest_phone` cuando `idUser` es NULL
+- Como máximo una cita activa por franja (`fecha_cita` + `hora_cita`)
 
 ### Tabla: `noticias`
-Almacena las noticias publicadas por administradores:
-- `idNoticia` (PK, AUTO_INCREMENT) - Identificador único
-- `titulo` (VARCHAR, UNIQUE, NOT NULL) - Título único de la noticia
-- `imagen` (VARCHAR(255), NOT NULL) - Ruta al archivo de imagen
-- `texto` (TEXT, NOT NULL) - Contenido de la noticia
-- `fecha` (DATE, NOT NULL) - Fecha de publicación
-- `idUser` (FK a users_data, NOT NULL) - Administrador que creó la noticia
+Noticias del sector motor:
+- `idNoticia` (PK), `titulo` (único), `imagen`, `texto`, `fecha`, `enlace` (opcional, fuente RSS), `idUser` (FK)
 
-**Relación:** Un administrador puede crear múltiples noticias (relación 1:N)
+### Tabla: `consejos`
+Consejos de mantenimiento redactados por el taller:
+- `idConsejo` (PK), `titulo`, `imagen` (opcional), `texto`, `fecha`, `idUser` (FK)
 
 **Características:**
 - Charset: `utf8mb4` para soporte completo de Unicode
@@ -598,7 +581,7 @@ El proyecto implementa múltiples capas de seguridad:
 
 El proyecto incluye un sistema completo de monitorización con Prometheus y Grafana (disponible solo con Docker).
 
-**📖 Para información detallada sobre el sistema de monitoreo, consulta [MONITORING.md](MONITORING.md)**
+**📖 Para información detallada sobre el sistema de monitorización, consulta [docs/MONITORING_SETUP_GUIDE.md](docs/MONITORING_SETUP_GUIDE.md)**
 
 ### Componentes de Monitorización
 
@@ -619,11 +602,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
   - **Usuario:** `admin` (configurable en `.env` con `GRAFANA_ADMIN_USER`)
   - **Contraseña:** `admin123` (configurable en `.env` con `GRAFANA_ADMIN_PASSWORD`)
 - Datasource configurado automáticamente (Prometheus)
-- Dashboards preconfigurados (se cargan automáticamente):
-  - 📈 **Sistema** (`sistema.json`) - CPU, memoria, disco, red
-  - 🌐 **Aplicación** (`aplicacion.json`) - Requests HTTP, tiempos de respuesta, sesiones
-  - 🗄️ **Base de Datos** (`base-datos.json`) - Consultas, conexiones, rendimiento MySQL
-  - 💼 **Negocio** (`negocio.json`) - Usuarios, citas, noticias, métricas de negocio
+- Dashboard principal preconfigurado: `monitoring/grafana/dashboards/taller-mecanico-dashboard.json` (sistema, aplicación, base de datos, negocio y contenedores)
 
 **Node Exporter** - Métricas del sistema
 - Puerto: 9100
@@ -643,17 +622,20 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 **⚠️ Nota:** La monitorización solo está disponible cuando se despliega con Docker. 
 
 **📚 Documentación:**
-- **[MONITORING.md](MONITORING.md)** - Guía completa del sistema de monitoreo
+- **[docs/MONITORING_SETUP_GUIDE.md](docs/MONITORING_SETUP_GUIDE.md)** - Guía completa del sistema de monitorización
 - **[docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)** - Guía de despliegue con Docker
 
 ## 📚 Documentación Adicional
+
+- 📖 **[docs/README.md](docs/README.md)** — Índice de todas las guías
+- 📖 **[CONTEXT.md](CONTEXT.md)** — Glosario de dominio (Cita, Citación, roles, tráfico simulado, etc.)
 
 - 📖 **[docs/GUIA_USUARIO.md](docs/GUIA_USUARIO.md)** - Guía completa de uso para todos los tipos de usuarios (visitantes, usuarios registrados y administradores)
 - 🔧 **[docs/STACK_TECNOLOGICO.md](docs/STACK_TECNOLOGICO.md)** - Detalles técnicos del stack tecnológico utilizado
 - 🐳 **[docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)** - Guía completa de despliegue con Docker y monitorización (incluye instrucciones para Windows, Linux y Mac)
 - 💻 **[docs/GUIA_DESPLIEGUE_LOCAL.md](docs/GUIA_DESPLIEGUE_LOCAL.md)** - Guía paso a paso para desplegar con XAMPP en Windows
 - ⚡ **[docs/INSTALL.md](docs/INSTALL.md)** - Guía de instalación rápida sin Docker (incluye comandos para Windows, Linux y Mac)
-- 📊 **[MONITORING.md](MONITORING.md)** - Guía completa del sistema de monitoreo con Prometheus y Grafana
+- 📊 **[docs/MONITORING_SETUP_GUIDE.md](docs/MONITORING_SETUP_GUIDE.md)** - Guía completa del sistema de monitorización con Prometheus y Grafana
 
 ## 🔗 URLs y Puertos de Acceso
 
@@ -689,16 +671,16 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 **Soluciones:**
 1. Verifica que MySQL esté ejecutándose
    - **XAMPP:** Panel de Control → MySQL debe estar en "Running"
-   - **Docker:** `docker-compose ps mysql`
+   - **Docker:** `docker compose ps mysql`
 2. Comprueba las credenciales:
    - **Local:** Revisa `config/database.php` (usuario: `root`, contraseña: vacía por defecto en XAMPP)
    - **Docker:** Revisa `.env` (variables `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`)
      - Por defecto: `DB_USER=root`, `DB_PASS=rootpassword`
 3. Verifica que la base de datos existe:
    - **phpMyAdmin:** http://localhost/phpmyadmin
-   - **Docker:** `docker-compose exec mysql mysql -u root -p -e "SHOW DATABASES;"`
+   - **Docker:** `docker compose exec mysql mysql -u root -p -e "SHOW DATABASES;"`
 4. Revisa los logs:
-   - **Docker:** `docker-compose logs mysql`
+   - **Docker:** `docker compose logs mysql`
 
 ### Error al subir imágenes
 
@@ -708,7 +690,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 1. **Permisos de carpeta:**
    - **Windows:** Propiedades → Seguridad → Otorgar "Control total" a "Usuarios"
    - **Linux/Mac:** `chmod 755 assets/images/`
-   - **Docker:** `docker-compose exec web chmod -R 755 /var/www/html/assets/images`
+   - **Docker:** `docker compose exec web chmod -R 755 /var/www/html/assets/images`
 2. **Extensión GD de PHP:**
    - **XAMPP:** Edita `C:\xampp\php\php.ini` → Busca `;extension=gd` → Quita el `;`
    - **Docker:** Ya está incluida en la imagen
@@ -736,7 +718,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 **Soluciones comunes:**
 - **Puertos ocupados:** Cambia los puertos en `.env` (por ejemplo, `WEB_PORT=8081`) o detén los servicios que los usan
 - **Windows + WSL (localhost no responde):** Si `http://localhost:<WEB_PORT>` devuelve “empty reply” o se queda cargando, prueba `http://<IP_LOCAL>:<WEB_PORT>` (por ejemplo `http://192.168.x.x:8081`) o cambia `WEB_PORT` a otro puerto libre (suele ser un conflicto de forwarding de WSL).
-- **Contenedores no inician:** Revisa `docker-compose logs` para ver errores
+- **Contenedores no inician:** Revisa `docker compose logs` para ver errores
 - **Docker Desktop no inicia (Windows):** Verifica que WSL 2 esté instalado y habilitado
 - **Credenciales incorrectas:** Verifica el archivo `.env` y las variables de entorno configuradas
 
@@ -757,7 +739,7 @@ El proyecto incluye un sistema completo de monitorización con Prometheus y Graf
 - ✅ Validación y seguridad implementadas
 
 ### Posibles Mejoras Futuras
-- 🔄 Sistema de notificaciones por email
+- 🔄 Sistema de notificaciones por correo electrónico ampliado
 - 📅 Calendario de citas mejorado
 - 📱 Aplicación móvil
 - 🔍 Sistema de búsqueda avanzada
@@ -822,7 +804,7 @@ Para obtener ayuda:
 
 #### Alertmanager (Solo con Docker)
 - **URL:** http://localhost:9093
-- **Email:** configurable vía `.env` (ver `.env.example` y `docs/MONITORING_SETUP_GUIDE.md`)
+- **Correo de alertas:** configurable vía `.env` (ver `.env.example` y `docs/MONITORING_SETUP_GUIDE.md`)
 
 #### phpMyAdmin (Solo con XAMPP)
 - **URL:** http://localhost/phpmyadmin
@@ -851,13 +833,13 @@ Todos los puertos se configuran en el archivo `.env`:
 **Para cambiar credenciales de Grafana (Docker):**
 1. Edita el archivo `.env`
 2. Cambia `GRAFANA_ADMIN_USER` y `GRAFANA_ADMIN_PASSWORD`
-3. Reinicia Grafana: `docker-compose restart grafana`
+3. Reinicia Grafana: `docker compose restart grafana`
 
 **Para cambiar credenciales de MySQL (Docker):**
 1. Edita el archivo `.env`
 2. Cambia `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`
 3. Actualiza `DB_PASS` en `.env` para que coincida
-4. Reinicia los contenedores: `docker-compose down && docker-compose up -d`
+4. Reinicia los contenedores: `docker compose down && docker compose up -d`
 
 **⚠️ IMPORTANTE:** 
 - Todas las credenciales por defecto son solo para desarrollo

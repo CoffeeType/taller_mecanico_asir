@@ -1,6 +1,6 @@
 # Despliegue en Coolify (MySQL)
 
-Esta guía cubre el despliegue en Coolify con MySQL y los pasos “antes de darle a Deploy” (recursos, variables, volúmenes y comprobaciones).
+Esta guía cubre el despliegue en Coolify con MySQL y los pasos previos al botón **Desplegar** del panel (recursos, variables, volúmenes y comprobaciones).
 
 El fallo más común en Coolify es que la app arranca sin `DB_*` y termina intentando conectar a `localhost` (dentro del contenedor), o que Coolify expone la BD como `MYSQL_*` en lugar de `DB_*`.
 
@@ -53,7 +53,7 @@ Nota sobre el scraping de métricas (importante):
   - Solución simple (sin redes compartidas): despliega todo junto con `docker-compose.coolify.yml`.
   - Solución avanzada: crea/usa una red externa compartida en Coolify y conecta ambos stacks a esa red, o adapta `monitoring/prometheus/prometheus.yml` para scrapear la URL pública de la app.
 
-## Checklist de verificación (tras el Deploy)
+## Checklist de verificación (tras el despliegue)
 
 - En Coolify, confirma que cada Domain/Route apunta al servicio y puerto correcto:
   - `web` → `80`
@@ -85,7 +85,7 @@ Configura estas variables en Coolify (Resource → **Environment Variables / Sec
 - `DB_USER`
 - `DB_PASS`
 
-**Muy importante (evita “deploy se para” y logs “congelados”):**
+**Muy importante (evita que el despliegue se quede parado y los registros “congelados”):**
 
 - En Docker/Coolify **no uses** `DB_HOST=localhost` (ni `127.0.0.1`, ni `::1`).
   - Dentro del contenedor, eso apunta al propio contenedor (PHP), no al MySQL.
@@ -133,7 +133,7 @@ DB_PASS=CAMBIA_ESTO
 
 Si usas `mysql_data` (volumen persistente), el script `database/database.sql` **solo se ejecuta la primera vez** (cuando el volumen está vacío).
 
-Qué revisar antes del primer deploy:
+Qué revisar antes del primer despliegue:
 
 - MySQL debe tener un volumen persistente (en el compose: `mysql_data:/var/lib/mysql`).
 - El SQL de arranque se carga desde `/docker-entrypoint-initdb.d/` (en `docker-compose.coolify.yml` se monta el directorio `./database:/docker-entrypoint-initdb.d:ro`).
@@ -147,7 +147,7 @@ Si cambias credenciales o necesitas reinicializar el esquema, borra el **volumen
 - Si MySQL vive en el mismo Compose, el host suele ser el **nombre del servicio**: `mysql`.
 - La app escucha en el puerto interno `80` (Coolify enruta el dominio a ese puerto).
 
-## 5) Checklist rápido antes de “Deploy”
+## 5) Checklist rápido antes de desplegar
 
 - El resource apunta al compose `docker-compose.dokploy.yml` (o equivalente sin bind-mount del código).
 - Dominio/Route → servicio `web` → puerto `80`.

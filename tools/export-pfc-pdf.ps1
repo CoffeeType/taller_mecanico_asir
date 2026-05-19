@@ -1,6 +1,14 @@
 $ErrorActionPreference = 'Stop'
-$docx = 'c:\Users\anton\Documents\GitHub\taller_mecanico_asir\docs\PFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells_con_diagramas.docx'
-$pdf = 'c:\Users\anton\Documents\GitHub\taller_mecanico_asir\docs\PFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells.pdf'
+# Exporta a PDF el COPIAPFC (fuente maestra en docs/). Requiere Microsoft Word instalado.
+param(
+  [string] $DocxPath = '',
+  [string] $PdfPath = ''
+)
+$repoDocs = Join-Path $PSScriptRoot '..\docs'
+$defaultDocx = Join-Path $repoDocs 'COPIAPFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells_con_diagramas.docx'
+$defaultPdf = Join-Path $repoDocs 'COPIAPFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells.pdf'
+$docx = if ($DocxPath) { (Resolve-Path -LiteralPath $DocxPath).Path } else { (Resolve-Path -LiteralPath $defaultDocx).Path }
+$pdf = if ($PdfPath) { $PdfPath } else { $defaultPdf }
 $w = New-Object -ComObject Word.Application
 $w.Visible = $false
 try {

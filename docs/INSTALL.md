@@ -171,10 +171,10 @@ Después de importar la base de datos, puedes iniciar sesión como administrador
 1. Accede a la aplicación en tu navegador
 2. Inicia sesión con las credenciales de administrador
 3. Verifica que puedas:
-   - Ver noticias
-   - Crear usuarios
-   - Administrar citas
-   - Crear noticias con imágenes
+   - Ver noticias en `noticias.php`
+   - Iniciar sesión como `admin` / `admin123`
+   - Abrir el menú **Admin** → `admin/usuarios.php`, `admin/citas.php`, `admin/noticias.php`
+   - Reservar una citación en `citaciones.php` (calendario + franja horaria)
 
 Si todo funciona correctamente, ¡la instalación está completa!
 

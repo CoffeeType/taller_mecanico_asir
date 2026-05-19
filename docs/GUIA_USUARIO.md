@@ -26,7 +26,7 @@ Ver la guía completa en [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
 
 2. Iniciar servicios:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Acceder a la aplicación:
@@ -105,13 +105,20 @@ El menú de navegación incluye:
    - Autor
    - Contenido completo
 
+### Reservar cita como invitado (sin cuenta)
+
+1. Abre **Citaciones** (`citaciones.php`) sin iniciar sesión.
+2. Elige fecha y franja horaria en el calendario.
+3. Completa **nombre**, **correo electrónico** y **teléfono** (obligatorios para invitados).
+4. Indica el motivo y confirma. Se crea una **cita** asociada a esos datos de contacto.
+
 ### Registrarse como Usuario
 
 1. Haz clic en **"Registro"** en el menú de navegación
 2. Completa el formulario con la siguiente información:
    - **Nombre** (obligatorio)
    - **Apellidos** (obligatorio)
-   - **Email** (obligatorio, debe ser único)
+   - **Correo electrónico** (obligatorio, debe ser único; campo `email`)
    - **Teléfono** (obligatorio)
    - **Fecha de Nacimiento** (obligatorio)
    - **Dirección** (opcional)
@@ -125,7 +132,7 @@ El menú de navegación incluye:
 5. Inicia sesión con tus nuevas credenciales
 
 **Notas:**
-- El email y el usuario deben ser únicos en el sistema
+- El correo electrónico y el usuario deben ser únicos en el sistema
 - La contraseña debe tener al menos 6 caracteres
 - Todos los campos marcados con * son obligatorios
 
@@ -147,7 +154,7 @@ Una vez que hayas iniciado sesión, tendrás acceso a funcionalidades adicionale
 El menú de navegación para usuarios registrados incluye:
 - **Inicio:** Página principal
 - **Noticias:** Visualización de noticias
-- **Citaciones:** Gestión de tus citas
+- **Citaciones:** Reservar citas y ver historial
 - **Perfil:** Ver y editar tu perfil
 - **Cerrar Sesión:** Salir de tu cuenta
 
@@ -178,46 +185,23 @@ El menú de navegación para usuarios registrados incluye:
 
 **Nota:** Las contraseñas deben coincidir y tener al menos 6 caracteres.
 
-### Gestión de Citas
+### Citaciones (`citaciones.php`)
 
-#### Crear una Nueva Cita
+Una **citación** es la acción de reservar; si tiene éxito, el sistema crea una **cita** (véase [CONTEXT.md](../CONTEXT.md)).
 
-1. Haz clic en **"Citaciones"** en el menú de navegación
-2. En la sección **"Solicitar Nueva Cita"**, completa:
-   - **Fecha de la Cita** (obligatorio, no puede ser anterior a hoy)
-   - **Motivo de la Cita** (obligatorio)
+#### Solicitar una citación
 
-3. Haz clic en **"Crear Cita"**
-4. Verás un mensaje de confirmación si la cita se creó correctamente
+1. Abre **Citaciones** en el menú (o la página `citaciones.php`).
+2. En el calendario, elige un día disponible (los días sin huecos aparecen bloqueados).
+3. Selecciona una **franja horaria** libre en la lista de horarios.
+4. Escribe el **motivo** de la visita.
+5. Confirma la reserva. Si la franja ya está ocupada, verás un error (no se crea la cita).
 
-#### Ver Todas tus Citas
+#### Ver tus citas
 
-1. En la página **"Citaciones"**, desplázate a la sección **"Mis Citas"**
-2. Verás una tabla con todas tus citas ordenadas por fecha (ascendente)
-3. La tabla muestra:
-   - Fecha de la cita
-   - Motivo
-   - Acciones disponibles (Editar/Eliminar)
-
-#### Editar una Cita
-
-1. En la lista de citas, haz clic en **"Editar"** en la cita que deseas modificar
-2. El formulario se actualizará con los datos de la cita
-3. Modifica los campos necesarios:
-   - Fecha (no puede ser anterior a hoy)
-   - Motivo
-
-4. Haz clic en **"Actualizar Cita"**
-
-**Nota:** Solo puedes editar citas futuras. Las citas pasadas no se pueden modificar.
-
-#### Eliminar una Cita
-
-1. En la lista de citas, haz clic en **"Eliminar"** en la cita que deseas eliminar
-2. Confirma la eliminación en el diálogo que aparece
-3. La cita será eliminada permanentemente
-
-**Nota:** Solo puedes eliminar citas futuras. Las citas pasadas no se pueden eliminar.
+1. En la misma página, baja a **Mis Citas Agendadas** (solo con sesión iniciada).
+2. La tabla muestra fecha, hora, motivo y estado (próxima o pasada).
+3. **No** puedes editar ni eliminar citas desde aquí; para cambios, contacta con el taller o pide al administrador que gestione la cita en `admin/citas.php`.
 
 ### Cerrar Sesión
 
@@ -230,20 +214,22 @@ Los administradores tienen acceso a todas las funcionalidades de usuarios, más 
 
 ### Navegación para Administradores
 
-El menú de navegación para administradores incluye:
-- **Inicio:** Página principal
-- **Noticias:** Visualización de noticias
-- **Usuarios:** Administración de usuarios
-- **Citas:** Administración de todas las citas
-- **Noticias Admin:** Administración de noticias
-- **Perfil:** Ver y editar perfil
-- **Cerrar Sesión:** Salir de la cuenta
+El menú de administración (desplegable **Admin**) enlaza al panel en `admin/`:
+- **Panel Principal** (`admin/index.php`)
+- **Usuarios** (`admin/usuarios.php`)
+- **Citas** (`admin/citas.php`)
+- **Noticias** (`admin/noticias.php`)
+- **Consejos** (`admin/consejos.php`)
+
+Desde la barra pública siguen disponibles Inicio, Noticias, Citaciones (reserva) y Perfil.
+
+> Los ficheros `*-administracion.php` en la raíz del proyecto son **legacy** del PFC inicial; no uses esas rutas: el panel canónico es `admin/`.
 
 ### Administración de Usuarios
 
 #### Ver Todos los Usuarios
 
-1. Haz clic en **"Usuarios"** en el menú de navegación
+1. En el menú Admin, abre **Usuarios** (`admin/usuarios.php`)
 2. Verás una tabla con todos los usuarios registrados en el sistema
 3. La tabla muestra:
    - ID
@@ -286,46 +272,24 @@ El menú de navegación para administradores incluye:
 
 **ADVERTENCIA:** Esta acción no se puede deshacer.
 
-### Administración de Citas
+### Administración de citas (`admin/citas.php`)
 
-#### Ver Todas las Citas
+#### Ver todas las citas
 
-1. Haz clic en **"Citas"** en el menú de navegación
-2. Verás una tabla con todas las citas de todos los usuarios
-3. La tabla muestra:
-   - ID de cita
-   - Usuario (nombre completo)
-   - Email del usuario
-   - Fecha de la cita
-   - Motivo
-   - Acciones disponibles
+1. En el menú Admin, abre **Citas**.
+2. Verás citas de usuarios registrados e invitados (datos de contacto del invitado cuando `idUser` es nulo).
+3. La tabla incluye fecha, **hora**, motivo y acciones.
 
-#### Crear una Cita para un Usuario
+#### Editar o eliminar una cita
 
-1. En la página **"Administración de Citas"**, completa el formulario:
-   - **Usuario** (selecciona de la lista desplegable)
-   - **Fecha de la Cita** (obligatorio)
-   - **Motivo de la Cita** (obligatorio)
+1. Usa **Editar** para cambiar fecha, hora o motivo (todos obligatorios).
+2. Usa **Eliminar** para borrar el registro (**eliminar cita** en el glosario: borrado físico, no es un estado «cancelada»).
 
-2. Haz clic en **"Crear Cita"**
+### Administración de noticias (`admin/noticias.php`)
 
-#### Editar una Cita
+#### Ver todas las noticias
 
-1. En la lista de citas, haz clic en **"Editar"** en la cita deseada
-2. Modifica los campos necesarios
-3. Haz clic en **"Actualizar Cita"**
-
-#### Eliminar una Cita
-
-1. En la lista de citas, haz clic en **"Eliminar"** en la cita deseada
-2. Confirma la eliminación
-3. La cita será eliminada permanentemente
-
-### Administración de Noticias
-
-#### Ver Todas las Noticias
-
-1. Haz clic en **"Noticias Admin"** en el menú de navegación
+1. En el menú Admin, abre **Noticias** (`admin/noticias.php`)
 2. Verás una tabla con todas las noticias publicadas
 3. La tabla muestra:
    - ID
@@ -336,7 +300,7 @@ El menú de navegación para administradores incluye:
 
 #### Crear una Nueva Noticia
 
-1. En la página **"Administración de Noticias"**, completa el formulario:
+1. En `admin/noticias.php`, completa el formulario:
    - **Título** (obligatorio, único)
    - **Imagen** (obligatorio, formato JPG/PNG, máximo 5MB)
    - **Texto** (obligatorio)
@@ -367,7 +331,13 @@ El menú de navegación para administradores incluye:
 2. Confirma la eliminación
 3. La noticia y su imagen asociada serán eliminadas
 
-### Acceso a Monitorización (Grafana)
+### Administración de consejos (`admin/consejos.php`)
+
+1. En el menú Admin, abre **Consejos**.
+2. Crea, edita o elimina consejos de mantenimiento (título, texto, imagen opcional, fecha).
+3. Los visitantes los consultan en la sección pública de consejos del sitio.
+
+### Acceso a monitorización (Grafana)
 
 Los administradores pueden acceder al sistema de monitorización cuando el proyecto está desplegado con Docker:
 
@@ -434,7 +404,7 @@ Los administradores pueden acceder al sistema de monitorización cuando el proye
 
 **Soluciones:**
 1. Verifica tus credenciales
-2. Si usas Docker, verifica que MySQL esté corriendo: `docker-compose ps mysql`
+2. Si usas Docker, verifica que MySQL esté corriendo: `docker compose ps mysql`
 3. Verifica la configuración en `config/database.php` o `.env`
 
 ### Error al subir imágenes
@@ -448,7 +418,7 @@ Los administradores pueden acceder al sistema de monitorización cuando el proye
 1. Verifica permisos: `chmod 755 assets/images/`
 2. Verifica que el archivo sea JPG o PNG
 3. Verifica que el tamaño sea menor a 5MB
-4. Si usas Docker: `docker-compose exec web chmod -R 755 /var/www/html/assets/images`
+4. Si usas Docker: `docker compose exec web chmod -R 755 /var/www/html/assets/images`
 
 ### Error de conexión a la base de datos
 
@@ -461,19 +431,19 @@ Los administradores pueden acceder al sistema de monitorización cuando el proye
 1. Verifica que MySQL esté corriendo
 2. Verifica las credenciales en `config/database.php` o `.env`
 3. Verifica que la base de datos exista
-4. Si usas Docker, verifica los logs: `docker-compose logs mysql`
+4. Si usas Docker, verifica los registros: `docker compose logs mysql`
 
-### No puedo editar/eliminar una cita pasada
+### No puedo cambiar una cita desde Citaciones
 
-**Causa:** Por diseño, las citas pasadas no se pueden modificar ni eliminar.
+**Causa:** En `citaciones.php` solo puedes **solicitar** citaciones y **consultar** el historial; no hay edición ni borrado para usuarios.
 
-**Solución:** Esta es una característica de seguridad. Solo puedes modificar citas futuras.
+**Solución:** Pide al administrador que actualice o elimine la cita en `admin/citas.php`.
 
-### El email/usuario ya está registrado
+### El correo o usuario ya está registrado
 
-**Causa:** El email o usuario que intentas usar ya existe en el sistema.
+**Causa:** El correo electrónico o el nombre de usuario que intentas usar ya existe en el sistema.
 
-**Solución:** Usa un email o usuario diferente, o inicia sesión con las credenciales existentes.
+**Solución:** Usa otro correo o usuario, o inicia sesión con las credenciales existentes.
 
 ### No tengo acceso a funciones de administrador
 
@@ -490,19 +460,21 @@ Los administradores pueden acceder al sistema de monitorización cuando el proye
 - El proyecto no está desplegado con Docker (la monitorización solo funciona con Docker)
 
 **Soluciones:**
-1. Verifica que estés usando Docker: `docker-compose ps`
-2. Verifica que Prometheus esté corriendo: `docker-compose ps prometheus`
+1. Verifica que estés usando Docker: `docker compose ps`
+2. Verifica que Prometheus esté en ejecución: `docker compose ps prometheus`
 3. Accede a Prometheus: http://localhost:9090/targets y verifica que todos los targets estén "UP"
    - Deberías ver: prometheus, php-app, node-exporter, mysqld-exporter
 4. En Grafana, el datasource de Prometheus se configura automáticamente desde `monitoring/grafana/provisioning/datasources/`
-5. Verifica los logs: `docker-compose logs prometheus`
+5. Verifica los registros: `docker compose logs prometheus`
 6. Verifica que los dashboards estén en `monitoring/grafana/dashboards/` (deberían cargarse automáticamente)
 
-## Recursos Adicionales
+## Recursos adicionales
 
-- [README.md](README.md) - Información general del proyecto
-- [STACK_TECNOLOGICO.md](STACK_TECNOLOGICO.md) - Detalles técnicos del stack
-- [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) - Guía de despliegue con Docker
+- [README.md](../README.md) — Información general del proyecto
+- [docs/README.md](README.md) — Índice de toda la documentación
+- [CONTEXT.md](../CONTEXT.md) — Glosario (cita, citación, roles, etc.)
+- [STACK_TECNOLOGICO.md](STACK_TECNOLOGICO.md) — Detalles técnicos del stack
+- [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) — Despliegue con Docker
 
 ## Soporte
 

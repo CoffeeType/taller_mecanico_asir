@@ -42,9 +42,7 @@ try {
     # 2) Grafana JSON
     Info "Grafana dashboard JSON"
     $dashFiles = @(
-        "monitoring/grafana/dashboards/taller-mecanico-dashboard.json",
-        "monitoring/grafana/dashboards_backup/aplicacion.json",
-        "monitoring/grafana/dashboards_backup/negocio.json"
+        "monitoring/grafana/dashboards/taller-mecanico-dashboard.json"
     )
     foreach ($df in $dashFiles) {
         $p = Join-Path $RepoRoot $df
@@ -77,7 +75,12 @@ try {
             "health.php",
             "index.php",
             "scripts/run_jmeter_traffic.php",
-            "tests/test_traffic_simulator_lib.php"
+            "tests/test_traffic_simulator_lib.php",
+            "tests/booking_api_client.php",
+            "tests/test_booking_conflict.php",
+            "tests/test_booking_roundtrip.php",
+            "tests/test_booking_validation.php",
+            "tests/test_perfil_requires_login.php"
         )
         $vol = "${RepoRoot}:/var/www/html"
         Info "php -l (php:8.2-cli)"
@@ -138,16 +141,39 @@ try {
     }
 
     $bookingUrl = "$base/api/citas_api.php?year=$(Get-Date -Format 'yyyy')&month=$(Get-Date -Format 'M')"
+    $httpTestsRan = $false
     try {
         $api = Invoke-WebRequest -Uri $bookingUrl -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
         $j = $api.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
         if ($null -ne $j -and $j.PSObject.Properties.Name -contains "booked") {
             Pass "GET citas_api (JSON booked)"
+            $volBooking = "${RepoRoot}:/var/www/html"
+            $dockerBase = "http://host.docker.internal:$webPort"
+            $httpTests = @(
+                @{ File = "tests/test_booking_access.php"; Label = "test_booking_access" },
+                @{ File = "tests/test_booking_roundtrip.php"; Label = "test_booking_roundtrip" },
+                @{ File = "tests/test_booking_validation.php"; Label = "test_booking_validation" },
+                @{ File = "tests/test_booking_conflict.php"; Label = "test_booking_conflict" },
+                @{ File = "tests/test_perfil_requires_login.php"; Label = "test_perfil_requires_login" }
+            )
+            foreach ($ht in $httpTests) {
+                docker run --rm -e "BOOKING_TEST_BASE=$dockerBase" --add-host=host.docker.internal:host-gateway -v $volBooking -w /var/www/html php:8.2-cli php $ht.File 2>&1 | Out-Host
+                if ($LASTEXITCODE -eq 0) {
+                    Pass $ht.Label
+                } else {
+                    Warn "$($ht.Label) fallido (revisa API en $base)"
+                }
+            }
+            $httpTestsRan = $true
         } else {
             Warn "citas_api respuesta sin clave booked"
         }
     } catch {
         Warn "Smoke citas_api omitido (servicio no arriba o API error)"
+    }
+
+    if (-not $httpTestsRan) {
+        Warn "Tests HTTP de booking/perfil omitidos (citas_api no disponible)"
     }
 
     Write-Host ""

@@ -21,7 +21,7 @@ Este documento recoge lo realizado para pasar el dashboard de Grafana desde `No 
 | [docker-compose.yml](../docker-compose.yml) | Servicios `cadvisor` y `telegraf` (montaje socket Docker, entrada root vía override de entrypoint, imagen, variables de red). |
 | [monitoring/prometheus/prometheus.yml](../monitoring/prometheus/prometheus.yml) | Job de scrape para `cadvisor` (`cadvisor:8080`). |
 | [monitoring/grafana/dashboards/taller-mecanico-dashboard.json](../monitoring/grafana/dashboards/taller-mecanico-dashboard.json) | Paneles de CPU/memoria por contenedor usando métricas Telegraf (`docker_container_*`) y leyendas `{{container_name}}`. |
-| Otros del repo ya en trabajo | `README.md`, `docs/DOCKER_DEPLOYMENT.md`, `docs/GUIA_DESPLIEGUE_LOCAL.md`, `docs/INSTALL.md`, etc. pueden reflejar ajustes de documentación paralelos; el núcleo técnico de métricas de contenedor es el listado de arriba. |
+| Guías relacionadas | [MONITORING_SETUP_GUIDE.md](MONITORING_SETUP_GUIDE.md), [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) |
 
 ### Archivos eliminados
 

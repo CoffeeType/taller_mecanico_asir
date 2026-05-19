@@ -184,7 +184,7 @@ Comprueba al menos:
 - `DEPLOY_MONITORING=1` y `COMPOSE_PROFILES=monitoring,traffic` (**full stack** por defecto en `.env.aws.example`). Ajusta `MIN_MONITORING_MEM_MB` / `MIN_TRAFFIC_STACK_MEM_MB` o usa `FORCE_MONITORING_ON_LOW_MEM=1` / `ALLOW_DEGRADED_STACK=1` según memoria RAM+swap (recomendado **t3.medium+** o al menos ~4 GiB RAM+swap; el bootstrap crea 4 GiB de swap por defecto).
 - Para **solo** `web` + `mysql`: deja `COMPOSE_PROFILES` vacío y `DEPLOY_MONITORING=0`.
 - SMTP para Alertmanager si quieres correos (`SMTP_*`, `ALERT_EMAIL_TO`). Para Amazon SES puedes definir `SES_SMTP_REGION` y dejar `SMTP_SMARTHOST` vacío: los scripts rellenan `email-smtp.<region>.amazonaws.com:587`. Si **no** configuras correo todavía, deja `ALERT_EMAIL_TO` vacío: el entrypoint de Alertmanager usa una config **noop** válida hasta que completes SMTP.
-- URLs públicas de UIs (`PROMETHEUS_EXTERNAL_URL`, `GRAFANA_EXTERNAL_URL`, `ALERTMANAGER_EXTERNAL_URL`, `TRAFFIC_SIMULATOR_UI_EXTERNAL_URL`): el deploy las actualiza con metadata EC2 si no fijas `PUBLIC_ACCESS_HOST`.
+- URLs públicas de UIs (`PROMETHEUS_EXTERNAL_URL`, `GRAFANA_EXTERNAL_URL`, `ALERTMANAGER_EXTERNAL_URL`, `TRAFFIC_SIMULATOR_UI_EXTERNAL_URL`): el script de despliegue las actualiza con metadata EC2 si no fijas `PUBLIC_ACCESS_HOST`.
 
 #### 4b) Alertmanager con Amazon SES SMTP
 
@@ -411,7 +411,7 @@ Puedes usar también [`docker/backup.sh`](../docker/backup.sh) montando credenci
 | Alertmanager cae al arrancar / Prometheus no levanta | Comprueba montaje en [`docker-compose.aws.yml`](../docker-compose.aws.yml) (`alertmanager.yml` → `/etc/alertmanager/config/alertmanager.yml`) y logs: `docker compose logs alertmanager`. Sin correo configurado debe usarse config noop (entrypoint). |
 | `missing to address in email config` (Alertmanager) | Rellena `ALERT_EMAIL_TO` **y** como mínimo `SMTP_SMARTHOST` y `SMTP_FROM`, o deja correo vacío para modo noop hasta configurar SMTP. |
 | SES no envia email | Verifica identidad `SMTP_FROM`, destinatarios si SES esta en sandbox, credenciales SMTP de SES y endpoint `email-smtp.<region>.amazonaws.com:587`. |
-| Fallos raros al cargar `.env` en el despliegue | No edites `.env` con sintaxis rara en una sola línea; el deploy ya no hace `source .env`. Usa `docker compose ... --env-file .env` explícitamente si llamas a Compose a mano. |
+| Fallos raros al cargar `.env` en el despliegue | No edites `.env` con sintaxis rara en una sola línea; `deploy_aws_docker.sh` ya no hace `source .env`. Usa `docker compose ... --env-file .env` explícitamente si llamas a Compose a mano. |
 | `permission denied` al conectar a `/var/run/docker.sock` como `ec2-user` | Tras `usermod -a -G docker`, la sesión SSH **abierta** no recibe el grupo hasta **nueva conexión SSH** o `newgrp docker`. Comprueba `groups`. Temporalmente: `sudo docker ps`. ([Guía AWS — mismo aviso tras añadir el usuario al grupo `docker`](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html#create-container-image-install-docker).) |
 
 ## Evolución recomendada

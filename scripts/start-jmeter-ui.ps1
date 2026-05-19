@@ -155,6 +155,22 @@ Write-Host ""
 Write-Host "UI Apache JMeter lista: $uiUrl" -ForegroundColor Green
 Write-Host "Desde ahi puedes iniciar/parar simulaciones y abrir el Dashboard JMeter generado." -ForegroundColor Green
 
+$usageScript = Join-Path $RepoRoot "scripts/print-jmeter-usage.sh"
+$grafanaPort = Read-EnvValue "GRAFANA_HOST_PORT" "3000"
+$grafanaUrl = "http://localhost:$grafanaPort"
+if (Get-Command bash -ErrorAction SilentlyContinue) {
+    Write-Host ""
+    & bash $usageScript $uiUrl $grafanaUrl
+} else {
+    Write-Host ""
+    Write-Host "Guia rapida (sin bash: instala Git Bash o WSL, o lee docs/TRAFFIC_SIMULATOR.md):" -ForegroundColor Yellow
+    Write-Host "  1) Destino: URL base (http://web en Docker)." -ForegroundColor Gray
+    Write-Host "  2) Carga: perfil, usuarios, duracion." -ForegroundColor Gray
+    Write-Host "  3) Ejecutar: Comprobar destino; Iniciar prueba." -ForegroundColor Gray
+    Write-Host "  4) Resultados: metrics.log en el panel." -ForegroundColor Gray
+    Write-Host "  5) Grafana: $grafanaUrl (fila Simulador, source=simulator)." -ForegroundColor Gray
+}
+
 if (-not $NoOpenBrowser) {
     Start-Process $uiUrl
 }

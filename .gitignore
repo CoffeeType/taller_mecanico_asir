@@ -4,6 +4,7 @@ node_modules/
 # Runtime/generated
 logs/*.log
 cache/*.json
+docs/.pptx_gen_media/
 
 # Local debug outputs
 db_out.txt
@@ -14,6 +15,18 @@ tips_output.txt
 
 # Telegraf / monitoring debug dumps (no versionar)
 logs/*metrics*snapshot*.txt
+
+# PFC docx build / unpack workspaces (generated locally; no subir tras editar)
+docs/_copiapfc_*/
+docs/_reaudit/
+docs/_verify_unzip/
+docs/*.docx.bak-*
+docs/_copiapfc_temp.zip
+docs/_verify.zip
+docs/_section_*.xml
+docs/_end54.txt
+docs/_fix_*.ps1
+docs/_reaudit-*.mjs
 
 # Environment files (keep examples tracked)
 .env

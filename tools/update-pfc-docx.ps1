@@ -1,7 +1,16 @@
 $ErrorActionPreference = 'Stop'
-# Actualiza el PFC DOCX: diagrama JMeter, índice de tablas, redacción, anexo C (sin romper OOXML).
+# Actualiza el COPIAPFC (memoria en Word): diagrama JMeter, índice de tablas, redacción, anexo C (sin romper OOXML).
+param(
+  [string] $DocxPath = ''
+)
 $utf8 = New-Object System.Text.UTF8Encoding $false
-$docx = (Resolve-Path (Join-Path $PSScriptRoot '..\docs\PFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells_con_diagramas.docx')).Path
+$defaultRel = '..\docs\COPIAPFC_Taller_Mecanico_ASIR_Antonio_Corredera_Cubells_con_diagramas.docx'
+$docx = if ($DocxPath) {
+  (Resolve-Path -LiteralPath $DocxPath).Path
+} else {
+  (Resolve-Path (Join-Path $PSScriptRoot $defaultRel)).Path
+}
+if (-not (Test-Path -LiteralPath $docx)) { throw "No se encuentra el DOCX: $docx" }
 
 function Read-DocXml([string]$Path) {
   Add-Type -AssemblyName System.IO.Compression.FileSystem

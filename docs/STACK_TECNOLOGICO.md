@@ -39,7 +39,7 @@ El proyecto está construido con un stack LAMP (Linux, Apache, MySQL, PHP) moder
   - LocalStorage/SessionStorage (si aplica)
 
 **Archivos:**
-- `assets/css/style.css` - Estilos principales
+- `css/style.css` — Estilos principales del sitio
 
 ## Backend
 
@@ -131,15 +131,20 @@ El proyecto está construido con un stack LAMP (Linux, Apache, MySQL, PHP) moder
 - Foreign Key: idUser → users_data(idUser) ON DELETE CASCADE
 
 **Tabla: `citas`**
-- Almacena citas de usuarios
-- Campos: idCita, idUser, fecha_cita, motivo_cita
-- Índices: PRIMARY KEY (idCita)
+- Citas persistidas tras una citación exitosa
+- Campos: idCita, idUser (nullable para invitados), fecha_cita, hora_cita, motivo_cita, guest_name, guest_email, guest_phone
+- Índice compuesto: fecha_cita + hora_cita (una cita activa por franja)
 - Foreign Key: idUser → users_data(idUser) ON DELETE CASCADE
 
 **Tabla: `noticias`**
-- Almacena noticias publicadas
-- Campos: idNoticia, titulo, imagen, texto, fecha, idUser
+- Noticias del sector motor
+- Campos: idNoticia, titulo, imagen, texto, fecha, enlace (opcional), idUser
 - Índices: PRIMARY KEY (idNoticia), UNIQUE (titulo)
+- Foreign Key: idUser → users_data(idUser) ON DELETE CASCADE
+
+**Tabla: `consejos`**
+- Consejos de mantenimiento del taller
+- Campos: idConsejo, titulo, imagen (opcional), texto, fecha, idUser
 - Foreign Key: idUser → users_data(idUser) ON DELETE CASCADE
 
 #### Características MySQL Utilizadas
@@ -264,49 +269,16 @@ El proyecto está construido con un stack LAMP (Linux, Apache, MySQL, PHP) moder
 - **Uso:** Visualización de métricas
 - **Autenticación:** Usuario/contraseña
 
-#### Dashboards Incluidos
+#### Dashboard incluido
 
-Los dashboards se cargan automáticamente desde `monitoring/grafana/dashboards/`:
+Se carga automáticamente desde `monitoring/grafana/dashboards/`:
 
-1. **Dashboard de Sistema** (`sistema.json`)
-   - Uso de CPU
-   - Uso de memoria
-   - Uso de disco
-   - Tráfico de red
-   - Fuente: Node Exporter
-
-2. **Dashboard de Aplicación** (`aplicacion.json`)
-   - Requests HTTP por método
-   - Requests HTTP por estado
-   - Tiempo de respuesta
-   - Sesiones activas
-   - Total de requests
-   - Fuente: PHP Exporter (metrics.php)
-
-3. **Dashboard de Base de Datos** (`base-datos.json`)
-   - Conexiones MySQL
-   - Consultas por segundo
-   - Operaciones de lectura/escritura
-   - Tamaño de base de datos
-   - Uptime MySQL
-   - Fuente: MySQL Exporter
-
-4. **Dashboard de Negocio** (`negocio.json`)
-   - Total de usuarios
-   - Usuarios por rol
-   - Total de citas
-   - Citas por estado
-   - Total de noticias
-   - Sesiones activas
-   - Fuente: PHP Exporter (metrics.php)
+- **`taller-mecanico-dashboard.json`** — Panel unificado: sistema (Node Exporter), aplicación y negocio (`metrics.php`), MySQL (mysqld-exporter) y métricas por contenedor (Telegraf/cAdvisor cuando están activos).
 
 **Archivos:**
-- `monitoring/grafana/provisioning/datasources/prometheus.yml` - Configuración automática del datasource de Prometheus
-- `monitoring/grafana/provisioning/dashboards/dashboard.yml` - Configuración de carga automática de dashboards
-- `monitoring/grafana/dashboards/sistema.json` - Dashboard de métricas del sistema
-- `monitoring/grafana/dashboards/aplicacion.json` - Dashboard de métricas de la aplicación
-- `monitoring/grafana/dashboards/base-datos.json` - Dashboard de métricas de MySQL
-- `monitoring/grafana/dashboards/negocio.json` - Dashboard de métricas de negocio
+- `monitoring/grafana/provisioning/datasources/prometheus.yml` — Datasource Prometheus
+- `monitoring/grafana/provisioning/dashboards/dashboard.yml` — Provisioning de dashboards
+- `monitoring/grafana/dashboards/taller-mecanico-dashboard.json` — Dashboard principal
 
 ## Seguridad
 

@@ -1,0 +1,10 @@
+﻿flowchart TD
+    crearInstancia["Crear instancia EC2"] --> userData["Ejecutar user data"]
+    userData --> instalarDocker["Instalar Docker Compose y Buildx"]
+    instalarDocker --> clonarRepo["Clonar repo en /opt/taller_mecanico_asir"]
+    clonarRepo --> crearEnv["Crear .env y rotar secretos"]
+    crearEnv --> deploy["Ejecutar deploy_aws_docker.sh"]
+    deploy --> logsBootstrap["Consultar /var/log/taller-ec2-bootstrap.log"]
+    deploy --> nuevaSesion["exit y nueva SSH para grupo docker"]
+    nuevaSesion --> dockerPs["docker ps y docker compose ps"]
+    crearEnv --> credenciales["grep GRAFANA .env y grep MYSQL .env"]

@@ -1,8 +1,8 @@
-# Guía de Configuración de Monitoreo - Taller Mecánico
+# Guía de configuración de monitorización — Taller Mecánico
 
-## 📊 Resumen del Sistema de Monitoreo
+## 📊 Resumen del sistema de monitorización
 
-Este documento describe cómo configurar y utilizar el sistema de monitoreo completo para tu taller mecánico, incluyendo Prometheus, Grafana, alertas y notificaciones.
+Este documento describe cómo configurar y utilizar el sistema de monitorización completo para tu taller mecánico, incluyendo Prometheus, Grafana, alertas y notificaciones.
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -21,7 +21,7 @@ Este documento describe cómo configurar y utilizar el sistema de monitoreo comp
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Node Exporter │    │ MySQL Exporter  │    │   Alertas por   │
-│ (Sistema)       │    │ (Base de Datos) │    │     Email       │
+│ (Sistema)       │    │ (Base de Datos) │    │     correo      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -39,14 +39,14 @@ Este documento describe cómo configurar y utilizar el sistema de monitoreo comp
 
 ## 🚀 Configuración Rápida
 
-### Paso 1: Iniciar el Sistema de Monitoreo
+### Paso 1: Iniciar el sistema de monitorización
 
 ```bash
-# Iniciar todos los servicios de monitoreo (incluye blackbox para probes HTTP)
-docker-compose up -d prometheus alertmanager grafana node-exporter mysqld-exporter cadvisor telegraf blackbox-exporter
+# Iniciar todos los servicios de monitorización (incluye blackbox para probes HTTP)
+docker compose up -d prometheus alertmanager grafana node-exporter mysqld-exporter cadvisor telegraf blackbox-exporter
 
 # Verificar que todos los servicios estén corriendo
-docker-compose ps
+docker compose ps
 ```
 
 ### Paso 2: Acceder a los Servicios
@@ -171,7 +171,7 @@ En AWS, Amazon SES funciona como SMTP estándar. Consulta la guía específica d
 Después de modificar `.env`:
 
 ```bash
-docker-compose up -d alertmanager prometheus
+docker compose up -d alertmanager prometheus
 ```
 
 ### Enviar un email de prueba (desde Grafana)
@@ -217,7 +217,7 @@ Sustituye `startsAt` / `endsAt` por timestamps RFC3339 recientes (Alertmanager i
 | `MySQLConnectionsExhausted` | Uso de conexiones > 80 %. |
 | `MySQLSlowQueries` | Alta tasa de slow queries. |
 | `HighCPUUsage` / `HighMemoryUsage` / `LowDiskSpace` | Umbrales por debajo de los críticos. |
-| `CadvisorDown` / `TelegrafDown` | Monitoreo de contenedores opcional degradado. |
+| `CadvisorDown` / `TelegrafDown` | Monitorización de contenedores opcional degradada. |
 | `BlackboxExporterDown` | No hay probes sintéticos hasta recuperar blackbox. |
 
 **Eliminadas por ruido o duplicidad:** `NoHTTPRequests` (sitios de bajo tráfico), `PrometheusTargetDown` genérico (`up == 0` para todos los jobs).
@@ -339,12 +339,12 @@ La plantilla de Alertmanager contiene placeholders (`__SMTP_*__`); la validació
 
 1. **Verificar provisionamiento**:
 ```bash
-docker-compose logs grafana | grep -i dashboard
+docker compose logs grafana | grep -i dashboard
 ```
 
 2. **Reiniciar Grafana**:
 ```bash
-docker-compose restart grafana
+docker compose restart grafana
 ```
 
 3. **Verificar permisos**:
@@ -365,7 +365,7 @@ curl http://localhost:80/metrics.php
 
 3. **Verificar logs**:
 ```bash
-docker-compose logs prometheus
+docker compose logs prometheus
 ```
 
 ### Alertas no se disparan
@@ -458,7 +458,7 @@ app_citas_total
 
 ## 📈 Mejores Prácticas
 
-### 1. Monitoreo Proactivo
+### 1. Monitorización proactiva
 - Revisar dashboards diariamente
 - Establecer alertas antes de que ocurran problemas
 - Monitorear tendencias a largo plazo
@@ -514,18 +514,18 @@ app_citas_total
 ### Comandos Útiles
 ```bash
 # Ver logs de todos los servicios
-docker-compose logs -f
+docker compose logs -f
 
-# Reiniciar servicios de monitoreo
-docker-compose restart prometheus grafana
+# Reiniciar servicios de monitorización
+docker compose restart prometheus grafana
 
 # Ver estado de contenedores
-docker-compose ps
+docker compose ps
 
 # Limpiar logs antiguos
-docker-compose exec grafana grafana-cli admin reset-admin-password newpass
+docker compose exec grafana grafana-cli admin reset-admin-password newpass
 ```
 
 ---
 
-**Nota**: Este sistema de monitoreo proporciona visibilidad completa de tu taller mecánico, permitiéndote detectar y resolver problemas antes de que afecten a tus clientes. Revisa regularmente los dashboards y ajusta los umbrales según el crecimiento de tu negocio.
+**Nota**: Este sistema de monitorización proporciona visibilidad completa de tu taller mecánico, permitiéndote detectar y resolver problemas antes de que afecten a tus clientes. Revisa regularmente los dashboards y ajusta los umbrales según el crecimiento de tu negocio.

@@ -2,6 +2,8 @@
 
 Esta guía explica cómo desplegar la aplicación Taller Mecánico usando Docker y Docker Compose.
 
+> **Comandos:** en toda la documentación del repo se usa **`docker compose`** (plugin V2 integrado en Docker Desktop y en instalaciones recientes de Linux). El binario antiguo `docker-compose` (con guion) suele seguir funcionando como alias, pero no es la forma recomendada. Los ficheros de orquestación conservan el nombre `docker-compose.yml` (convención del proyecto).
+
 ## Requisitos Previos
 
 - Docker Engine 20.10 o superior
@@ -25,7 +27,7 @@ Esta guía explica cómo desplegar la aplicación Taller Mecánico usando Docker
 3. **Verificar la instalación:**
    - Abre PowerShell o CMD
    - Ejecuta: `docker --version`
-   - Ejecuta: `docker-compose --version`
+   - Ejecuta: `docker compose version`
 
 ## Instalación Rápida
 
@@ -107,7 +109,7 @@ Este script arranca Docker Desktop si hace falta, crea `.env` desde `.env.exampl
 
 **En Linux/Mac/Windows (PowerShell/CMD):**
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Este comando:
@@ -124,7 +126,7 @@ Este comando:
 
 **En Linux/Mac/Windows (PowerShell/CMD):**
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 Todos los servicios deberían estar en estado "Up".
@@ -168,11 +170,7 @@ docker ps
 - **Puerto:** 3000 (configurable)
 - **Imagen:** `grafana/grafana:latest`
 - **Dashboards:** Se cargan automáticamente desde `monitoring/grafana/dashboards/`
-- **Dashboards incluidos:**
-  - `sistema.json` - Métricas del sistema (CPU, memoria, disco, red)
-  - `aplicacion.json` - Métricas de la aplicación (requests, tiempos de respuesta)
-  - `base-datos.json` - Métricas de MySQL
-  - `negocio.json` - Métricas de negocio (usuarios, citas, noticias)
+- **Dashboard principal:** `monitoring/grafana/dashboards/taller-mecanico-dashboard.json` (sistema, aplicación, base de datos, negocio y contenedores cuando Telegraf/cAdvisor están activos)
 - **Telegraf/cAdvisor/Prometheus:** el stack también puede incluir `telegraf` (métricas por contenedor vía Docker) y `cadvisor` (métricas cAdvisor scrapeadas por Prometheus). Si ves `No data` en paneles por contenedor o problemas de permisos con el socket de Docker en Windows, consulta el runbook: [MONITORING_CONTAINER_METRICS_RUNBOOK.md](MONITORING_CONTAINER_METRICS_RUNBOOK.md).
 
 ### 5. Node Exporter (Métricas del Sistema)
@@ -203,12 +201,12 @@ docker ps
 
 ```bash
 # Todos los servicios
-docker-compose logs -f
+docker compose logs -f
 
 # Servicio específico
-docker-compose logs -f web
-docker-compose logs -f mysql
-docker-compose logs -f grafana
+docker compose logs -f web
+docker compose logs -f mysql
+docker compose logs -f grafana
 ```
 
 **Para salir de los logs en tiempo real:** Presiona `Ctrl + C`
@@ -216,25 +214,25 @@ docker-compose logs -f grafana
 ### Detener los Servicios
 
 ```bash
-docker-compose stop
+docker compose stop
 ```
 
 ### Iniciar los Servicios
 
 ```bash
-docker-compose start
+docker compose start
 ```
 
 ### Reiniciar un Servicio Específico
 
 ```bash
-docker-compose restart web
+docker compose restart web
 ```
 
 ### Detener y Eliminar Contenedores
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## Troubleshooting
@@ -243,8 +241,8 @@ docker-compose down
 
 Esto suele indicar que estás usando una base de datos creada con un esquema anterior.
 
-- Reinicia el contenedor `web` para que ejecute la migración automática: `docker-compose restart web`
-- Si quieres recrear la base de datos desde cero (pierdes datos): `docker-compose down -v` y luego `docker-compose up -d`
+- Reinicia el contenedor `web` para que ejecute la migración automática: `docker compose restart web`
+- Si quieres recrear la base de datos desde cero (pierdes datos): `docker compose down -v` y luego `docker compose up -d`
 - Para desactivar la migración automática: añade `AUTO_MIGRATE=0` en el `.env` del servicio `web`
 
 **ADVERTENCIA:** Esto no elimina los volúmenes. Los datos de MySQL se conservan.
@@ -252,7 +250,7 @@ Esto suele indicar que estás usando una base de datos creada con un esquema ant
 ### Detener y Eliminar Todo (Incluyendo Datos)
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 **ADVERTENCIA:** Esto elimina todos los datos, incluyendo la base de datos.
@@ -262,23 +260,23 @@ docker-compose down -v
 Si has modificado el código o el Dockerfile:
 
 ```bash
-docker-compose build web
-docker-compose up -d web
+docker compose build web
+docker compose up -d web
 ```
 
 ### Acceder al Contenedor
 
 ```bash
 # Acceder al contenedor web
-docker-compose exec web bash
+docker compose exec web bash
 
 # Acceder a MySQL
-docker-compose exec mysql mysql -u root -p
+docker compose exec mysql mysql -u root -p
 ```
 
 **Nota para Windows:** Si `bash` no está disponible en el contenedor, puedes usar `sh`:
 ```bash
-docker-compose exec web sh
+docker compose exec web sh
 ```
 
 ## Backup y Restore
@@ -291,7 +289,7 @@ docker-compose exec web sh
 export $(grep -v '^#' .env | xargs)
 
 # Crear backup con timestamp
-docker-compose exec mysql mysqldump -u root -p"${MYSQL_ROOT_PASSWORD:-rootpassword}" trabajo_final_php > backup_$(date +%Y%m%d_%H%M%S).sql
+docker compose exec mysql mysqldump -u root -p"${MYSQL_ROOT_PASSWORD:-rootpassword}" trabajo_final_php > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Verificar que el backup se creó correctamente
 if [ -f backup_*.sql ]; then
@@ -315,7 +313,7 @@ if (-not $mysqlPassword) { $mysqlPassword = "rootpassword" }
 
 # Crear backup con timestamp
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-docker-compose exec mysql mysqldump -u root -p"$mysqlPassword" trabajo_final_php > "backup_$timestamp.sql"
+docker compose exec mysql mysqldump -u root -p"$mysqlPassword" trabajo_final_php > "backup_$timestamp.sql"
 
 # Verificar que el backup se creó correctamente
 if (Test-Path "backup_$timestamp.sql") {
@@ -334,7 +332,7 @@ REM Para cargar desde .env, puedes usar un script de PowerShell o configurarlo m
 REM set MYSQL_ROOT_PASSWORD=rootpassword
 
 REM Crear backup con timestamp
-docker-compose exec mysql mysqldump -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php > backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%.sql
+docker compose exec mysql mysqldump -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php > backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%.sql
 
 REM Verificar que el backup se creó (revisar manualmente)
 dir backup_*.sql
@@ -345,10 +343,10 @@ dir backup_*.sql
 ### Restore de la Base de Datos
 
 **IMPORTANTE:** Antes de restaurar un backup:
-- Asegúrate de que los contenedores estén ejecutándose: `docker-compose ps`
+- Asegúrate de que los contenedores estén ejecutándose: `docker compose ps`
 - Verifica que el archivo de backup existe y es válido
 - Si restauras sobre una base de datos existente, los datos actuales serán sobrescritos
-- Para una restauración limpia, considera eliminar el volumen primero: `docker-compose down -v` (esto elimina todos los datos)
+- Para una restauración limpia, considera eliminar el volumen primero: `docker compose down -v` (esto elimina todos los datos)
 
 #### Restore en Linux/Mac (Bash)
 
@@ -365,32 +363,32 @@ export $(grep -v '^#' .env | xargs)
 MYSQL_PASS="${MYSQL_ROOT_PASSWORD:-rootpassword}"
 
 # 3. Verificar que MySQL está ejecutándose
-if ! docker-compose ps mysql | grep -q "Up"; then
+if ! docker compose ps mysql | grep -q "Up"; then
     echo "Error: El contenedor MySQL no está ejecutándose"
-    echo "Inicia los contenedores con: docker-compose up -d"
+    echo "Inicia los contenedores con: docker compose up -d"
     exit 1
 fi
 
 # 4. Crear la base de datos si no existe (normalmente ya existe)
 echo "Verificando que la base de datos existe..."
-docker-compose exec -T mysql mysql -u root -p"$MYSQL_PASS" -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || {
+docker compose exec -T mysql mysql -u root -p"$MYSQL_PASS" -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || {
     echo "Error: No se pudo crear/verificar la base de datos"
     exit 1
 }
 
 # 5. Restaurar el backup
 echo "Restaurando backup..."
-docker-compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php < backup.sql || {
+docker compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php < backup.sql || {
     echo "Error: La restauración falló"
     exit 1
 }
 
 # 6. Verificar que la restauración fue exitosa
 echo "Verificando restauración..."
-TABLES=$(docker-compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php -e "SHOW TABLES;" 2>/dev/null | wc -l)
+TABLES=$(docker compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php -e "SHOW TABLES;" 2>/dev/null | wc -l)
 if [ "$TABLES" -gt 1 ]; then
     echo "✅ Restauración exitosa. Se encontraron $((TABLES-1)) tablas."
-    docker-compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php -e "SHOW TABLES;"
+    docker compose exec -T mysql mysql -u root -p"$MYSQL_PASS" trabajo_final_php -e "SHOW TABLES;"
 else
     echo "⚠️ Advertencia: No se encontraron tablas después de la restauración"
     exit 1
@@ -416,16 +414,16 @@ $mysqlPassword = ($envFile | Where-Object { $_.Key -eq 'MYSQL_ROOT_PASSWORD' }).
 if (-not $mysqlPassword) { $mysqlPassword = "rootpassword" }
 
 # 3. Verificar que MySQL está ejecutándose
-$mysqlStatus = docker-compose ps mysql
+$mysqlStatus = docker compose ps mysql
 if ($mysqlStatus -notmatch "Up") {
     Write-Error "Error: El contenedor MySQL no está ejecutándose"
-    Write-Host "Inicia los contenedores con: docker-compose up -d"
+    Write-Host "Inicia los contenedores con: docker compose up -d"
     exit 1
 }
 
 # 4. Crear la base de datos si no existe (normalmente ya existe)
 Write-Host "Verificando que la base de datos existe..."
-docker-compose exec -T mysql mysql -u root -p"$mysqlPassword" -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+docker compose exec -T mysql mysql -u root -p"$mysqlPassword" -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Error: No se pudo crear/verificar la base de datos"
     exit 1
@@ -433,7 +431,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 5. Restaurar el backup
 Write-Host "Restaurando backup..."
-Get-Content backup.sql | docker-compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php
+Get-Content backup.sql | docker compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Error: La restauración falló"
     exit 1
@@ -441,11 +439,11 @@ if ($LASTEXITCODE -ne 0) {
 
 # 6. Verificar que la restauración fue exitosa
 Write-Host "Verificando restauración..."
-$tablesOutput = docker-compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php -e "SHOW TABLES;" 2>$null
+$tablesOutput = docker compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php -e "SHOW TABLES;" 2>$null
 $tableCount = ($tablesOutput | Measure-Object -Line).Lines
 if ($tableCount -gt 1) {
     Write-Host "✅ Restauración exitosa. Se encontraron $($tableCount - 1) tablas."
-    docker-compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php -e "SHOW TABLES;"
+    docker compose exec -T mysql mysql -u root -p"$mysqlPassword" trabajo_final_php -e "SHOW TABLES;"
 } else {
     Write-Warning "⚠️ Advertencia: No se encontraron tablas después de la restauración"
     exit 1
@@ -467,16 +465,16 @@ REM Nota: En CMD, necesitas configurar la variable manualmente o usar un script
 set MYSQL_ROOT_PASSWORD=rootpassword
 
 REM 3. Verificar que MySQL está ejecutándose
-docker-compose ps mysql | findstr "Up" >nul
+docker compose ps mysql | findstr "Up" >nul
 if errorlevel 1 (
     echo Error: El contenedor MySQL no está ejecutándose
-    echo Inicia los contenedores con: docker-compose up -d
+    echo Inicia los contenedores con: docker compose up -d
     exit /b 1
 )
 
 REM 4. Crear la base de datos si no existe (normalmente ya existe)
 echo Verificando que la base de datos existe...
-docker-compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+docker compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% -e "CREATE DATABASE IF NOT EXISTS trabajo_final_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 if errorlevel 1 (
     echo Error: No se pudo crear/verificar la base de datos
     exit /b 1
@@ -484,7 +482,7 @@ if errorlevel 1 (
 
 REM 5. Restaurar el backup
 echo Restaurando backup...
-type backup.sql | docker-compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php
+type backup.sql | docker compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php
 if errorlevel 1 (
     echo Error: La restauración falló
     exit /b 1
@@ -492,7 +490,7 @@ if errorlevel 1 (
 
 REM 6. Verificar que la restauración fue exitosa
 echo Verificando restauración...
-docker-compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php -e "SHOW TABLES;"
+docker compose exec -T mysql mysql -u root -p%MYSQL_ROOT_PASSWORD% trabajo_final_php -e "SHOW TABLES;"
 if errorlevel 1 (
     echo Advertencia: No se pudo verificar las tablas
     exit /b 1
@@ -510,16 +508,16 @@ if errorlevel 1 (
 
 **Cuándo usar Inicialización Fresca:**
 - Primera instalación del sistema
-- Después de eliminar volúmenes (`docker-compose down -v`)
+- Después de eliminar volúmenes (`docker compose down -v`)
 - Cuando quieres empezar desde cero
 
 **Para una inicialización fresca:**
 ```bash
 # Eliminar todos los datos y volúmenes
-docker-compose down -v
+docker compose down -v
 
 # Iniciar de nuevo (database.sql se ejecutará automáticamente)
-docker-compose up -d
+docker compose up -d
 ```
 
 **Advertencia sobre conflictos:**
@@ -529,11 +527,11 @@ Si restauras un backup sobre una base de datos que ya fue inicializada con `data
 
 Para evitar conflictos, elimina el volumen antes de restaurar:
 ```bash
-docker-compose down -v
-docker-compose up -d mysql
+docker compose down -v
+docker compose up -d mysql
 # Esperar a que MySQL esté listo, luego restaurar
 # ... (comandos de restore)
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Backup de Imágenes
@@ -611,8 +609,8 @@ GRAFANA_PORT=3001
 
 Después de cambiar el puerto, reinicia los contenedores:
 ```bash
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 **Solución 2: Detener el servicio que está usando el puerto**
@@ -660,12 +658,12 @@ ss -tuln
 
 1. Verifica los logs:
    ```bash
-   docker-compose logs web
+   docker compose logs web
    ```
 
 2. Verifica que MySQL esté funcionando:
    ```bash
-   docker-compose ps mysql
+   docker compose ps mysql
    ```
 
 3. Verifica las variables de entorno en `.env`
@@ -674,21 +672,21 @@ ss -tuln
 
 1. Verifica que MySQL esté corriendo:
    ```bash
-   docker-compose ps mysql
+   docker compose ps mysql
    ```
 
 2. Verifica las credenciales en `.env`
 
 3. Verifica que la base de datos se haya inicializado:
    ```bash
-   docker-compose logs mysql | grep "ready for connections"
+   docker compose logs mysql | grep "ready for connections"
    ```
 
 ### Prometheus no recopila métricas
 
 1. Verifica que Prometheus esté corriendo:
    ```bash
-   docker-compose ps prometheus
+   docker compose ps prometheus
    ```
 
 2. Accede a Prometheus y verifica los targets:
@@ -696,14 +694,14 @@ ss -tuln
 
 3. Verifica la configuración:
    ```bash
-   docker-compose exec prometheus cat /etc/prometheus/prometheus.yml
+   docker compose exec prometheus cat /etc/prometheus/prometheus.yml
    ```
 
 ### Grafana no muestra dashboards
 
 1. Verifica que Grafana esté corriendo:
    ```bash
-   docker-compose ps grafana
+   docker compose ps grafana
    ```
 
 2. Verifica que Prometheus esté configurado como datasource:
@@ -718,7 +716,7 @@ ss -tuln
    ```bash
    ls -la monitoring/grafana/dashboards/
    ```
-   Deberías ver: `sistema.json`, `aplicacion.json`, `base-datos.json`, `negocio.json`
+   Deberías ver al menos: `taller-mecanico-dashboard.json`
    
    **En Windows (PowerShell):**
    ```powershell
@@ -735,8 +733,8 @@ ss -tuln
    - Los dashboards se cargan automáticamente al iniciar Grafana
 
 5. Si los dashboards no aparecen:
-   - Reinicia Grafana: `docker-compose restart grafana`
-   - Verifica los logs: `docker-compose logs grafana`
+   - Reinicia Grafana: `docker compose restart grafana`
+   - Verifica los logs: `docker compose logs grafana`
 
 ### Problemas de Permisos
 
@@ -744,8 +742,8 @@ Si hay problemas con permisos en `assets/images/`:
 
 **En Linux/Mac:**
 ```bash
-docker-compose exec web chown -R www-data:www-data /var/www/html/assets/images
-docker-compose exec web chmod -R 755 /var/www/html/assets/images
+docker compose exec web chown -R www-data:www-data /var/www/html/assets/images
+docker compose exec web chmod -R 755 /var/www/html/assets/images
 ```
 
 **En Windows:**
@@ -787,7 +785,7 @@ Los permisos dentro del contenedor se manejan automáticamente. Si tienes proble
 Para escalar la aplicación web:
 
 ```bash
-docker-compose up -d --scale web=3
+docker compose up -d --scale web=3
 ```
 
 Nota: Necesitarás un balanceador de carga para distribuir el tráfico.
@@ -798,7 +796,7 @@ Para actualizar la aplicación:
 
 1. Detén los servicios:
    ```bash
-   docker-compose stop
+   docker compose stop
    ```
 
 2. Actualiza el código:
@@ -812,8 +810,8 @@ Para actualizar la aplicación:
 
 3. Reconstruye y reinicia:
    ```bash
-   docker-compose build
-   docker-compose up -d
+   docker compose build
+   docker compose up -d
    ```
 
 ## Limpieza
@@ -821,7 +819,7 @@ Para actualizar la aplicación:
 ### Eliminar Contenedores Parados
 
 ```bash
-docker-compose rm
+docker compose rm
 ```
 
 ### Limpiar Imágenes No Utilizadas

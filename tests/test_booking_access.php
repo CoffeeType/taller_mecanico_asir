@@ -1,7 +1,7 @@
 <?php
 // tests/test_booking_access.php — prueba rápida HTTP (api/citas_api.php usa exit() internamente)
 
-$base = rtrim(getenv('BOOKING_TEST_BASE') ?: 'http://127.0.0.1', '/');
+$base = rtrim(getenv('BOOKING_TEST_BASE') ?: 'http://127.0.0.1:8081', '/');
 $url = $base . '/api/citas_api.php?year=' . rawurlencode((string) date('Y')) . '&month=' . rawurlencode((string) date('n'));
 
 $ctx = stream_context_create([

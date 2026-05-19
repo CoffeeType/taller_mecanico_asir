@@ -229,6 +229,7 @@ smoke_jmeter_traffic() {
     after="${after:-0}"
     if [[ "$after" =~ ^[0-9]+$ && "$after" -gt "$before" ]]; then
       echo "OK: Apache JMeter genero trafico source=simulator (${before} -> ${after} lineas)."
+      echo "INFO: Para ver el efecto en graficos, abre la Traffic UI y lanza una prueba mas larga; en Grafana usa la fila Simulador (source=simulator)." >&2
       return 0
     fi
     now="$(date +%s)"
@@ -237,6 +238,7 @@ smoke_jmeter_traffic() {
   done
 
   echo "ERROR: Apache JMeter no genero lineas source=simulator tras el smoke." >&2
+  echo "INFO: Causas frecuentes: SIMULATOR_CONTROL_TOKEN invalido o distinto entre .env y el worker; contenedor traffic-simulator unhealthy; volumen ./logs no montado en el servicio web (Prometheus no vera metricas aunque el smoke cuente lineas en el worker)." >&2
   compose logs --tail 160 traffic-simulator || true
   compose exec -T -e SIM_TOKEN="$tok" traffic-simulator sh -lc \
     'curl -s -H "X-Simulator-Token: ${SIM_TOKEN}" http://127.0.0.1:8085/status || true' >&2
@@ -257,6 +259,21 @@ print_browser_urls() {
     echo "  Traffic UI:   http://${host}:${TRAFFIC_UI_PORT}"
   fi
   echo "Si no abre desde navegador, revisa Security Group/IAM: puertos ${GRAFANA_HOST_PORT},${PROMETHEUS_HOST_PORT},${ALERTMANAGER_HOST_PORT},${TRAFFIC_UI_PORT}."
+}
+
+print_jmeter_operator_guide() {
+  [[ "$WANT_TRAFFIC" != "1" ]] && return 0
+  local traffic_url grafana_url host
+  host="$(public_browser_host)"
+  traffic_url="$(read_env_var TRAFFIC_SIMULATOR_UI_EXTERNAL_URL "")"
+  [[ -n "$traffic_url" ]] || traffic_url="http://${host}:${TRAFFIC_UI_PORT}"
+  grafana_url=""
+  [[ "$WANT_MONITORING" == "1" ]] && grafana_url="http://${host}:${GRAFANA_HOST_PORT}"
+  if [[ -x "${SCRIPT_DIR}/print-jmeter-usage.sh" ]]; then
+    bash "${SCRIPT_DIR}/print-jmeter-usage.sh" "$traffic_url" "$grafana_url"
+  elif [[ -f "${SCRIPT_DIR}/print-jmeter-usage.sh" ]]; then
+    bash "${SCRIPT_DIR}/print-jmeter-usage.sh" "$traffic_url" "$grafana_url"
+  fi
 }
 
 # Valores por defecto del dashboard Grafana (textbox taller_app_base / prometheus_base) alineados con metadata EC2 / PUBLIC_ACCESS_HOST.
@@ -545,6 +562,7 @@ fi
 
 preflight_paths=(
   "database/database.sql"
+  "scripts/print-jmeter-usage.sh"
   "scripts/run_jmeter_traffic.php"
   "docker/traffic-simulator/assets/jmeter-report-custom.css"
   "monitoring/prometheus/prometheus.aws.yml"
@@ -718,6 +736,7 @@ if [[ "$WANT_TRAFFIC" == "1" ]]; then
 fi
 
 print_browser_urls
+print_jmeter_operator_guide
 
 echo "Contenedores Docker en el host (docker ps -a):"
 docker ps -a || true

@@ -12,6 +12,7 @@
 # Paste as plain text in “User data”; do not enable “already base64 encoded” unless you encoded the file.
 # Log: /var/log/taller-ec2-bootstrap.log
 # After boot: rotate secrets in /opt/taller_mecanico_asir/.env (from .env.aws.example).
+# Guia operativa JMeter (Traffic UI): docs/TRAFFIC_SIMULATOR.md (seccion guia rapida).
 #
 # Optional env (export before user data or inject via cloud-init env): overrides for plugin versions.
 # -----------------------------------------------------------------------------
@@ -385,7 +386,7 @@ install_resource_guard
 
 bootstrap_msg "Paso 9/9 — despliegue Compose (build/pull/up, smoke tests); ver también salida de deploy_aws_docker.sh"
 cd "${TARGET_DIR}"
-chmod +x scripts/deploy_aws_docker.sh scripts/taller-docker-safe-mode.sh
+chmod +x scripts/deploy_aws_docker.sh scripts/taller-docker-safe-mode.sh scripts/print-jmeter-usage.sh
 
 deploy_hook_fail() {
   echo "ERROR: deploy_aws_docker.sh failed; extra diagnostics:" >&2
@@ -406,6 +407,20 @@ fi
 
 bootstrap_msg "Contenedores en el host tras el despliegue (docker ps -a)"
 docker ps -a || true
+
+if [[ -x "${TARGET_DIR}/scripts/print-jmeter-usage.sh" ]]; then
+  bootstrap_msg "Guia operativa JMeter (docs/TRAFFIC_SIMULATOR.md)"
+  _tu="$(read_env_value "${TARGET_DIR}/.env" TRAFFIC_SIMULATOR_UI_EXTERNAL_URL || true)"
+  if [[ -z "${_tu}" ]]; then
+    _tu="http://$(public_browser_host "${TARGET_DIR}/.env"):$(read_env_value "${TARGET_DIR}/.env" TRAFFIC_SIMULATOR_UI_HOST_PORT || printf '8890')"
+  fi
+  _gr=""
+  _profiles="$(read_env_value "${TARGET_DIR}/.env" COMPOSE_PROFILES || true)"
+  if [[ "${_profiles}" == *monitoring* ]]; then
+    _gr="http://$(public_browser_host "${TARGET_DIR}/.env"):$(read_env_value "${TARGET_DIR}/.env" GRAFANA_HOST_PORT || printf '3000')"
+  fi
+  bash "${TARGET_DIR}/scripts/print-jmeter-usage.sh" "${_tu}" "${_gr}" || true
+fi
 
 echo "Bootstrap done. Log: /var/log/taller-ec2-bootstrap.log"
 echo "Note for SSH: user ${BOOT_USER} was added to group docker. Run 'exit' and open a NEW SSH session (or run: newgrp docker) before using docker without sudo."

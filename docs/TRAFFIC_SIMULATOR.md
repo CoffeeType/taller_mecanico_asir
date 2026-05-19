@@ -1,17 +1,67 @@
-# Simulador de tráfico con Apache JMeter (instancia separada)
+# Simulador de tráfico con Apache JMeter
 
-En documentación de producto y en la memoria PFC esta capacidad se describe como **pruebas de carga con Apache JMeter**; en Docker Compose el perfil y los nombres de servicio siguen siendo `traffic` / `traffic-simulator` por compatibilidad con el repositorio.
+En la memoria del proyecto, esta capacidad se describe como **pruebas de carga con Apache JMeter**. En Docker Compose el perfil y los servicios son `traffic`, `traffic-simulator` (worker) y `traffic-simulator-ui` (interfaz web). El worker ejecuta **JMeter en modo CLI (sin GUI)** y vuelca resultados al mismo formato de logs que consume la aplicación para Prometheus (`logs/metrics.log`, `logs/response_time.log`).
 
-Genera HTTP real con **Apache JMeter en modo CLI/no-GUI** contra la app PHP (u otra URL HTTPS/HTTP autorizada) y conserva el mismo formato de líneas que consume `metrics.php` (`logs/metrics.log`, `logs/response_time.log`).
+**Guía rápida (operador):** sigue los pasos numerados de la interfaz web (Destino → Carga → Ejecutar → Resultados → Grafana). El detalle técnico (API interna, variables, CLI) está al final de este documento.
 
-JMeter se instala dentro de la imagen `traffic-simulator` durante el build. La imagen usa Java 17 y Apache JMeter `JMETER_VERSION` (por defecto `5.6.3`, versión estable oficial que requiere Java 8+).
+---
 
-**Ya no existe** panel en `admin/` ni `/api/simulate.php`. El control está en:
+## Guía rápida (menos de cinco minutos)
 
-- **`traffic-simulator`**: API HTTP interna (`8085`) que genera un plan JMX temporal y ejecuta Apache JMeter, **solo red Docker**.
-- **`traffic-simulator-ui`**: interfaz web en **puerto publicado** (por defecto **8890**). En `docker-compose.yml` / `.env.example` el puerto del host se define con `TRAFFIC_SIMULATOR_UI_PORT`; en `docker-compose.aws.yml` / `.env.aws.example` se usa `TRAFFIC_SIMULATOR_UI_HOST_PORT`. `scripts/start-jmeter-ui.ps1` intenta leer primero `TRAFFIC_SIMULATOR_UI_PORT` y si falta usa `TRAFFIC_SIMULATOR_UI_HOST_PORT`. El token `SIMULATOR_CONTROL_TOKEN` solo vive en el servidor/contenedor backend (la UI llama a su `api.php` server-side).
+La interfaz web replica el flujo de una prueba controlada como si la aplicación estuviera expuesta: genera peticiones HTTP reales, las registra con `source=simulator` y permite verlas en la misma cadena **logs → `metrics.php` → Prometheus → Grafana** que el tráfico real (`source=app`).
 
-## Arranque (Docker Compose, recomendado)
+### Local (Windows)
+
+1. Ejecuta `.\scripts\start-jmeter-ui.ps1` (arranca Docker si hace falta, levanta `web`, `mysql`, `traffic-simulator`, `traffic-simulator-ui` y abre el navegador). Alternativa: `docker compose --profile traffic up -d` tras copiar `.env.example` a `.env`.
+2. Abre **http://localhost:8890** (o el puerto definido en `TRAFFIC_SIMULATOR_UI_PORT`).
+3. **Paso 1 — Destino:** URL base `http://web` (nombre del servicio de la app en la misma red Docker) o, si solo quieres probar la app publicada, la URL pública correspondiente.
+4. **Paso 2 — Carga:** elige perfil (Normal, Burst o Idle), usuarios concurrentes (1–20) y duración (5–300 s).
+5. **Paso 3 — Ejecutar:** pulsa **Comprobar destino**; luego **Iniciar prueba**. Usa **Detener** si necesitas cortar antes de tiempo.
+6. **Paso 4 — Resultados:** revisa estado, éxitos/errores y la vista previa de `metrics.log` en el panel derecho.
+7. **Paso 5 — Grafana e informe JMeter:** abre el enlace a Grafana (si el perfil `monitoring` está activo), entra en el dashboard principal y baja hasta la fila **Simulador** (métricas con `source=simulator`). Cuando la prueba termina, el enlace **Dashboard JMeter** abre el informe HTML generado bajo `logs/jmeter/.../html-report` (si `SIM_JMETER_HTML_REPORT=true`).
+
+### Local (Linux / macOS) o manual
+
+1. Copia variables desde `.env.example` a `.env` y ajusta al menos `SIMULATOR_CONTROL_TOKEN`.
+2. `docker compose --profile traffic up -d` (servicios `web`, `mysql`, `traffic-simulator`, `traffic-simulator-ui`).
+3. `curl -sS http://localhost:8890/health.php` debe devolver `"status":"ok"` (cambia el puerto si usaste otro en `TRAFFIC_SIMULATOR_UI_PORT`).
+4. Abre la misma URL en el navegador y sigue los pasos 3–7 anteriores.
+
+### AWS EC2 (tras despliegue)
+
+1. El script [`scripts/deploy_aws_docker.sh`](../scripts/deploy_aws_docker.sh) imprime las URLs de aplicación (`WEB_HOST_PORT`, por defecto 80), Grafana, Prometheus, Alertmanager y la **Traffic UI** (`TRAFFIC_SIMULATOR_UI_HOST_PORT`, por defecto **8890**), si los perfiles `monitoring` y `traffic` están en `COMPOSE_PROFILES`.
+2. Abre **http://IP_PUBLICA:8890** (sustituye por DNS público si lo tienes; respeta el puerto configurado).
+3. Repite los mismos pasos 3–7 de la guía local: destino puede ser `http://web` (carga interna al contenedor `web`) o la URL pública de la app en esa instancia.
+
+### Perfiles de carga (resumen)
+
+| Perfil  | Uso recomendado |
+|---------|-----------------|
+| **Normal** | Carga equilibrada; punto de partida habitual. |
+| **Burst** | Picos más agresivos; útil para estrés breve. |
+| **Idle** | Menos presión y más pausas; exploración suave. |
+
+### Qué no hacer
+
+- No uses el panel `admin/` para simular carga: el control está solo en la **Traffic UI** y en la API interna del worker.
+- No dirijas carga contra sitios de terceros sin **autorización explícita**; la UI exige confirmación para hosts no internos y el proyecto puede deshabilitar objetivos externos (`SIM_EXTERNAL_TARGETS_ENABLED=false`).
+- No expongas el puerto **8085** del worker a Internet sin firewall o reverse proxy; la UI ya actúa como proxy **server-side** y no envía el token al navegador.
+
+---
+
+## Comprobar que las métricas reflejan una web “real”
+
+Para que Prometheus y Grafana muestren el mismo tipo de series que con usuarios reales, hace falta la cadena completa de observabilidad:
+
+- [ ] `docker compose ps` incluye `web`, `traffic-simulator`, `traffic-simulator-ui` y, para gráficos en Grafana, **Prometheus y Grafana** (perfil `monitoring`).
+- [ ] Los tres servicios anteriores montan el **mismo** volumen `./logs` en `/var/www/html/logs` (si `web` no monta `./logs`, `metrics.php` no verá las líneas que escribe JMeter).
+- [ ] Durante una prueba, aumentan líneas con `source=simulator` en `logs/metrics.log` (o `grep -c source=simulator` dentro del contenedor `traffic-simulator`).
+- [ ] `curl` a `/metrics.php` en la app (o el target de Prometheus) muestra contadores con etiqueta `source="simulator"`.
+- [ ] En Grafana, el dashboard principal muestra actividad en la fila **Simulador** y en los paneles dedicados a JMeter (18–20), filtrando por `source="simulator"`.
+
+---
+
+## Arranque y variables (referencia breve)
 
 ### Windows automático
 
@@ -19,133 +69,94 @@ JMeter se instala dentro de la imagen `traffic-simulator` durante el build. La i
 .\scripts\start-jmeter-ui.ps1
 ```
 
-El script arranca Docker Desktop si hace falta, levanta `web`, `mysql`, `traffic-simulator` y `traffic-simulator-ui`, espera la UI y abre el navegador. También puedes lanzar `start-jmeter-ui.bat` con doble clic.
-
-### Manual / Linux / macOS
-
-1. Variables en `.env` (los secretos reales **no** se suben a git):
+### Variables típicas en `.env`
 
 ```env
 SIMULATOR_CONTROL_TOKEN=tu_token_largo_seguro
 SIM_BASE_URL=http://web
 TRAFFIC_SIMULATOR_UI_PORT=8890
-# En EC2 / docker-compose.aws.yml usa TRAFFIC_SIMULATOR_UI_HOST_PORT (mismo valor por defecto).
+# En EC2 / docker-compose.aws.yml: TRAFFIC_SIMULATOR_UI_HOST_PORT
 SIM_UI_DEFAULT_BASE_URL=http://web
 JMETER_VERSION=5.6.3
 SIM_JMETER_HEAP="-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m"
 SIM_JMETER_WORK_DIR=/var/www/html/logs/jmeter
 SIM_JMETER_HTML_REPORT=true
-# SIM_JMETER_REPORT_CSS_SOURCE=/opt/traffic-simulator/assets/jmeter-report-custom.css
 PROMETHEUS_EXTERNAL_URL=http://localhost:9090
 GRAFANA_EXTERNAL_URL=http://localhost:3000
 ```
 
-2. Levanta `web`, `mysql`, `traffic-simulator` y la UI (**perfil `traffic`**):
-
-```bash
-docker compose --profile traffic up -d
-```
-
-3. Comprueba salud HTTP (sustituye el puerto si lo cambiaste: `TRAFFIC_SIMULATOR_UI_PORT` en local, `TRAFFIC_SIMULATOR_UI_HOST_PORT` en AWS):
-
-```bash
-curl -sS http://localhost:8890/health.php
-```
-
-Debe devolver JSON con `"status":"ok"`. Si Docker no responde (`Cannot connect to the Docker daemon` / error del *pipe* en Windows), arranca **Docker Desktop** y espera a que el icono quede estable antes de repetir el comando.
-
-4. Abre la UI en el navegador (mismo puerto que en el paso anterior; en local suele ser **http://localhost:8890/**).
-
-5. Opcional CLI en el servicio worker:
+### CLI opcional (operador de confianza)
 
 ```bash
 docker compose run --rm traffic-simulator \
   php scripts/run_jmeter_traffic.php --users=3 --duration=30 --profile=normal --base-url=http://web
 ```
 
-El volumen `./logs` debe ser el mismo entre `traffic-simulator` y `traffic-simulator-ui` para que la vista previa y Prometheus reflejen las mismas líneas.
+Sin el perfil `traffic` no se levantan worker ni UI del simulador: usa siempre **`docker compose --profile traffic ...`** cuando necesites esta función.
 
-## Cómo encaja JMeter
+---
 
-- El runner genera un directorio compartido en `SIM_JMETER_WORK_DIR` (por defecto `/var/www/html/logs/jmeter`, dentro del volumen `logs`) con:
-  - `traffic-test.jmx`: plan JMeter generado.
-  - `routes.csv`: rutas ponderadas derivadas del JSON opcional o de las rutas por defecto.
-  - `results.jtl`: resultados CSV de JMeter.
-  - `jmeter.log` y `stdout.log`: diagnóstico del proceso.
-- JMeter se ejecuta con `jmeter -n -t traffic-test.jmx -l results.jtl -j jmeter.log`.
-- Mientras JMeter escribe el `.jtl`, el runner lo importa a:
-  - `logs/metrics.log`: `GET 200 /ruta source=simulator`.
-  - `logs/response_time.log`: tiempo en segundos.
-- `SIM_JMETER_HEAP` controla la memoria de Java. Para EC2 pequeño se recomienda mantener el valor por defecto; para más carga, sube heap y `TRAFFIC_SIMULATOR_MEM_LIMIT` juntos.
-- Con `SIM_JMETER_HTML_REPORT=true`, JMeter añade un reporte HTML en `html-report`. La **UI JMeter** lo enlaza como **Dashboard JMeter** cuando la ejecución termina.
-- Tras cada run, el runner copia un CSS opcional al directorio del informe y lo enlaza en `index.html` (mejoras cosméticas). La ruta del fichero fuente se define con `SIM_JMETER_REPORT_CSS_SOURCE` (por defecto en la imagen `traffic-simulator`: `/opt/traffic-simulator/assets/jmeter-report-custom.css`).
+## Referencia técnica
 
-### Sin el perfil `traffic`
+### Dónde está el control
 
-Sin `traffic-simulator`, la UI puede arrancarse solo si ese servicio existe; `depends_on` requiere el worker sano primero — usa siempre **`--profile traffic`** para tener ambos servicios.
+- **`traffic-simulator`**: API HTTP interna en **:8085**; genera un plan JMX temporal, ejecuta JMeter y convierte `results.jtl` a logs. Solo debe ser alcanzable desde la red Docker.
+- **`traffic-simulator-ui`**: interfaz en el puerto publicado del host (por defecto **8890**). Variables: `TRAFFIC_SIMULATOR_UI_PORT` en [`docker-compose.yml`](../docker-compose.yml) / `.env.example`; `TRAFFIC_SIMULATOR_UI_HOST_PORT` en [`docker-compose.aws.yml`](../docker-compose.aws.yml) / `.env.aws.example`. El token `SIMULATOR_CONTROL_TOKEN` solo existe en el servidor; [`docker/traffic-simulator-ui/public/api.php`](../docker/traffic-simulator-ui/public/api.php) reenvía las peticiones con el token.
 
-## Webs externas (uso responsable)
+JMeter se instala en la imagen del worker en el build (Java 17; versión `JMETER_VERSION`, por defecto **5.6.3**).
 
-- La URL debe ser **`http`** o **`https`**.
-- IPs **RFC1918 / loopback / reservadas** se rechazan salvo **`SIM_ALLOW_PRIVATE_TARGETS=true`** (solo entornos de laboratorio).
-- Dominios/host que **no** estén listados en `SIM_INTERNAL_HOSTS` requieren marcar confirmación en la UI (y campo `confirm_external` en `/start`): no sustituye la **autorización legal** ni evita límites o bloqueos del sitio objetivo — reduce abuso automatizado desde la herramienta.
-- **`SIM_EXTERNAL_TARGETS_ENABLED=false`** desactiva cualquier objetivo que no sea “interno”.
-- **`SIM_SSL_VERIFY=true`** por defecto (HTTPS con verificación de certificado); `SIM_SSL_VERIFY=false` solo depuración.
+### Artefactos por ejecución (bajo `SIM_JMETER_WORK_DIR`)
 
-Hosts internos por defecto (`SIM_INTERNAL_HOSTS`): incluye entre otros `web`, `localhost`, `127.0.0.1`, `mysql`, `host.docker.internal` (ajústalo si tu stack usa otros alias).
+- `traffic-test.jmx`, `routes.csv`, `results.jtl`, `jmeter.log`, `stdout.log`.
+- Comando equivalente: `jmeter -n -t traffic-test.jmx -l results.jtl -j jmeter.log`.
+- Importación a `logs/metrics.log` (`GET 200 /ruta source=simulator`) y `logs/response_time.log` (tiempos en segundos).
+- `SIM_JMETER_HEAP` y `TRAFFIC_SIMULATOR_MEM_LIMIT` deben subirse a la par si aumentas carga.
+- `SIM_JMETER_HTML_REPORT=true`: informe en `html-report`; CSS opcional vía `SIM_JMETER_REPORT_CSS_SOURCE`.
 
-CLI (`run_jmeter_traffic.php`, y el wrapper compatible `simulate_traffic.php`) se considera operador confiable (`trusted_cli`): no muestra checkbox, pero igual aplica política de IP privadas y externos deshabilitados.
+### Webs externas (uso responsable)
 
-## API HTTP de control (`traffic-simulator :8085`)
+- Solo **http** / **https**.
+- IPs RFC1918 / loopback / reservadas rechazadas salvo **`SIM_ALLOW_PRIVATE_TARGETS=true`** (laboratorio).
+- Hosts no listados en `SIM_INTERNAL_HOSTS`: confirmación en UI (`confirm_external` en API).
+- **`SIM_EXTERNAL_TARGETS_ENABLED=false`**: solo objetivos “internos”.
+- **`SIM_SSL_VERIFY=true`**: verificación TLS por defecto.
 
-Solo debe alcanzarse desde la Docker network (**no exponer sin reverse proxy**/firewall fuerte si publicas ese puerto en tu entorno).
+CLI (`run_jmeter_traffic.php`, `simulate_traffic.php`): operador confiable; misma política de IPs y externos.
 
-| Método | Ruta       | Auth |
-|--------|------------|------|
-| GET    | `/health` | No |
+### API de control (`:8085`)
+
+| Método | Ruta      | Auth |
+|--------|-----------|------|
+| GET    | `/health` | No   |
 | GET    | `/status` | `X-Simulator-Token` o `Bearer` |
-| POST   | `/start`  | Mismo header; JSON `users`, `duration`, `profile`, `base_url`, `confirm_external`, opcional `routes_file`; inicia JMeter |
-| POST   | `/stop`   | Mismo header |
+| POST   | `/start`  | Igual; JSON: `users`, `duration`, `profile`, `base_url`, `confirm_external`, opcional `routes_file` |
+| POST   | `/stop`   | Igual |
 
-La UI sirve **`/api.php`** (JSON GET/POST) y reenvía a `:8085` con el token de entorno; no expone el token al navegador.
+La UI expone **`/api.php`** con acciones `probe`, `start`, `stop`, `reset`.
 
-Acciones POST útiles: `probe` (comprueba HTTP contra la URL base antes de cargar), `start`, `stop`, `reset`.
+### Métricas y Grafana
 
-## Métricas
+- App: `source=app` (véase `includes/metrics_logger.php`).
+- JMeter: `source=simulator` tras importar el JTL.
+- Exporter: [`monitoring/php-exporter/metrics.php`](../monitoring/php-exporter/metrics.php) → `app_http_requests_total{method,status,source}`.
+- La UI devuelve además `success_requests`, `error_requests`, `recent_success`, `recent_errors`, `recent_window`, `statuses`.
 
-Las series Prometheus se derivan de los logs compartidos (`logs/metrics.log`). Cada línea incluye el origen:
+### Si la simulación corre pero Grafana no muestra nada
 
-- **App PHP:** `GET 200 source=app` (ver `includes/metrics_logger.php`).
-- **Tráfico JMeter en métricas:** `GET 200 /ruta source=simulator` (el runner convierte `results.jtl`).
+1. Mismo volumen `./logs` en `web`, `traffic-simulator` y `traffic-simulator-ui`.
+2. `SIM_LOG_DIR=/var/www/html/logs` en la UI; evita rutas relativas fuera del árbol de la app.
+3. `docker compose exec traffic-simulator tail -80 /tmp/traffic_simulator.log` y GET `/status` para rutas de `results.jtl` y `jmeter.log`.
+4. Tras cambios en `metrics.php`: `docker compose build web`.
 
-El exporter [`monitoring/php-exporter/metrics.php`](monitoring/php-exporter/metrics.php) expone `app_http_requests_total{method,status,source}`. Líneas antiguas sin `source=` se clasifican en el parser como `app` o `simulator` por heurística (presencia de ruta).
-
-En **Grafana**, el dashboard principal incluye filas que filtran por **`source="simulator"`** (tráfico de JMeter). Las consultas sin filtro por `source` siguen sumando todo el tráfico.
-
-La **UI JMeter** (`api.php`) devuelve `success_requests`, `error_requests`, `recent_success`, `recent_errors` y `recent_window` además de `statuses`.
-
-### Si la simulación “corre” pero la UI y Grafana están vacíos
-
-1. **Mismo volumen de logs**: `traffic-simulator`, `traffic-simulator-ui` y **`web`** deben montar el mismo `./logs:/var/www/html/logs`. Si el contenedor `web` no monta `./logs`, Prometheus (vía `/metrics.php`) no verá las líneas que escribe JMeter.
-2. **Ruta por defecto en la UI**: la imagen define `SIM_LOG_DIR=/var/www/html/logs`. Si personalizas Compose, no uses rutas tipo `../logs` fuera del árbol de la app.
-3. **Depurar el worker**: `docker compose exec traffic-simulator tail -80 /tmp/traffic_simulator.log` (errores del runner, JMeter o URL base). El endpoint `/status` también devuelve rutas de `results.jtl` y `jmeter.log`.
-4. **Reconstruir `web`** tras cambiar `metrics.php`: `docker compose build web` (el Dockerfile copia el exporter a `/var/www/html/metrics.php`).
-
-## Tests locales del motor
-
-Sin PHP local:
+### Tests y smoke
 
 ```bash
 docker run --rm -v "%cd%:/app" -w /app php:8.2-cli php tests/test_traffic_simulator_lib.php
 ```
 
-## Build imágenes
-
 ```bash
 docker compose build web traffic-simulator traffic-simulator-ui
 ```
-
-## Smoke JMeter
 
 ```bash
 docker compose --profile traffic up -d web mysql traffic-simulator traffic-simulator-ui
@@ -156,3 +167,5 @@ docker compose exec -T traffic-simulator sh -lc \
   http://127.0.0.1:8085/start'
 docker compose exec -T traffic-simulator sh -lc 'tail -20 "${SIM_LOG_DIR:-/var/www/html/logs}/metrics.log"'
 ```
+
+Tras desplegar en EC2, el script `deploy_aws_docker.sh` ejecuta un smoke similar cuando el perfil `traffic` está activo (omisible con `SKIP_TRAFFIC_SMOKE=1`). Al final del despliegue y en el *user data* de EC2 se imprime también la guía operativa vía `scripts/print-jmeter-usage.sh`.

@@ -1,0 +1,11 @@
+﻿flowchart TD
+    operador["Operador técnico"] --> preparar["Preparar plan JMX"]
+    preparar --> rutas["Rutas de la aplicación"]
+    rutas --> jmeter["Apache JMeter CLI"]
+    jmeter --> appWeb["Aplicación PHP Apache"]
+    appWeb --> accessLogs["logs de peticiones y tiempos"]
+    jmeter --> jtl["results.jtl y jmeter.log"]
+    jtl --> metricsFile["metrics.log con origen de prueba"]
+    accessLogs --> prometheus["Prometheus lee metrics.php"]
+    metricsFile --> prometheus
+    prometheus --> grafana["Grafana muestra efecto de la prueba"]
